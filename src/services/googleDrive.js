@@ -207,7 +207,19 @@ export async function resolveUploadFolder(
   };
 }
 
+function driveAuthLog(label, accessToken, extra = {}) {
+  if (import.meta.env.DEV || import.meta.env.VITE_AUTH_DEBUG === 'true') {
+    console.info(`[PMSI Drive] ${label}`, {
+      target: 'drive/v3/files',
+      tokenPresent: Boolean(accessToken),
+      tokenLengthPresent: Boolean(accessToken?.length),
+      ...extra,
+    });
+  }
+}
+
 export async function loadCustomersFromDrive(accessToken) {
+  driveAuthLog('loadCustomersFromDrive', accessToken);
   try {
     const pmsiId = await findPmsiFolderId(accessToken);
     if (!pmsiId) return [];

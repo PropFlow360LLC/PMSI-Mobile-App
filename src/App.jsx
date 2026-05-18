@@ -169,6 +169,12 @@ export default function App() {
   };
 
   const handleLogin = async (session) => {
+    if (import.meta.env.DEV || import.meta.env.VITE_AUTH_DEBUG === 'true') {
+      console.info('[PMSI Auth] handleLogin', {
+        tokenPresent: Boolean(session?.accessToken),
+        tokenLengthPresent: Boolean(session?.accessToken?.length),
+      });
+    }
     setAccessToken(session.accessToken);
     setUser(session.user);
     setSessionExpiry(session.expiresAt);
