@@ -1,13 +1,17 @@
 {
+  "id": "/",
   "name": "PMSI Mobile App",
   "short_name": "PMSI",
-  "description": "Property maintenance photo capture and upload",
+  "description": "Property maintenance photo capture and upload to Google Drive",
+  "lang": "en",
+  "dir": "ltr",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
   "theme_color": "#000000",
   "background_color": "#000000",
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/icon-192.png",
