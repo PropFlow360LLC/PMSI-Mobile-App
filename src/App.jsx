@@ -218,7 +218,7 @@ export default function App() {
   };
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div className="app-shell">
       {notification && (
         <div
           style={{
@@ -234,6 +234,7 @@ export default function App() {
         </div>
       )}
 
+      <div className="app-screen">
       {screen === 'login' && <Login onLogin={handleLogin} onNotification={showNotification} />}
       {screen === 'form' && (
         <MainForm
@@ -261,6 +262,7 @@ export default function App() {
           onCancel={() => setScreen('form')}
         />
       )}
+      </div>
     </div>
   );
 }

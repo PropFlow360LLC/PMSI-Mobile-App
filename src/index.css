@@ -12,6 +12,87 @@ html, body, #root {
   overflow: hidden;
 }
 
+/* App shell — dvh + flex so children don’t overflow under mobile browser chrome */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+
+.app-screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Main form — scrollable body + footer clear of Safari / home-indicator */
+.form-screen {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+}
+
+.form-screen-header {
+  flex-shrink: 0;
+  padding: 12px 16px;
+  padding-top: max(12px, env(safe-area-inset-top, 0px));
+  border-bottom: 1px solid #1a2540;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.form-screen-queue {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  background: #1a1000;
+  border-bottom: 1px solid #854d0e;
+  font-size: 11px;
+  color: #fbbf24;
+}
+
+.form-screen-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 20px;
+  /* space so last field isn’t hidden behind sticky footer */
+  padding-bottom: 12px;
+}
+
+.form-screen-footer {
+  flex-shrink: 0;
+  padding: 16px;
+  /* Safari bottom bar: safe-area often 0 in-browser — enforce minimum lift */
+  padding-bottom: max(28px, calc(env(safe-area-inset-bottom, 0px) + 20px));
+  border-top: 1px solid #1a2540;
+  background: linear-gradient(180deg, rgba(10, 14, 39, 0.95) 0%, #0a0e27 100%);
+}
+
+.form-screen-footer .form-primary-btn {
+  width: 100%;
+  padding: 14px 12px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+  color: #fff;
+}
+
+.form-screen-footer .form-primary-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 input, select, textarea, button {
   font-family: inherit;
   font-size: inherit;

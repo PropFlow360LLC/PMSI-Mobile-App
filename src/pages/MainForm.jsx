@@ -106,20 +106,8 @@ export default function MainForm({
       : null;
 
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100vh',
-      background: 'linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%)',
-      overflow: 'hidden',
-    }}>
-      <div style={{
-        padding: '12px 16px',
-        borderBottom: '1px solid #1a2540',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-      }}>
+    <div className="form-screen">
+      <div className="form-screen-header">
         <div style={{ fontSize: '12px', color: '#7aaad8' }}>
           {user?.name || user?.email || 'User'}
         </div>
@@ -139,18 +127,12 @@ export default function MainForm({
       </div>
 
       {queueLabel && (
-        <div style={{
-          padding: '8px 16px',
-          background: '#1a1000',
-          borderBottom: '1px solid #854d0e',
-          fontSize: '11px',
-          color: '#fbbf24',
-        }}>
+        <div className="form-screen-queue">
           📤 Upload queue: {queueLabel}
         </div>
       )}
 
-      <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
+      <div className="form-screen-body">
         <div style={{ marginBottom: '16px' }}>
           <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#4a6fa8', marginBottom: '6px', textTransform: 'uppercase' }}>
             👤 Customer *
@@ -298,21 +280,15 @@ export default function MainForm({
         )}
       </div>
 
-      <div style={{ padding: '16px', borderTop: '1px solid #1a2540' }}>
+      <div className="form-screen-footer">
         <button
+          type="button"
           onClick={onOpenCamera}
           disabled={!selectedCustomer || !selectedAddress || extracting}
+          className="form-primary-btn"
           style={{
-            width: '100%',
-            padding: '12px',
             background: selectedCustomer && selectedAddress && !extracting ? '#008800' : '#004400',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '8px',
-            fontSize: '16px',
-            fontWeight: '600',
             cursor: selectedCustomer && selectedAddress && !extracting ? 'pointer' : 'not-allowed',
-            opacity: selectedCustomer && selectedAddress && !extracting ? 1 : 0.5,
           }}
         >
           📷 Open Camera
