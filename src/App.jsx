@@ -136,6 +136,16 @@ export default function App() {
   }, [screen, accessToken, runQueueProcessor]);
 
   useEffect(() => {
+    if (screen === 'login') return undefined;
+
+    const interval = setInterval(() => {
+      runQueueProcessor();
+    }, 10 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [screen, runQueueProcessor]);
+
+  useEffect(() => {
     if (!sessionExpiry) return;
     const timer = setInterval(() => {
       if (Date.now() > sessionExpiry) {

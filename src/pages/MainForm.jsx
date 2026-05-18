@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import AddressScanCamera from '../components/AddressScanCamera';
 import {
   checkDuplicateAddress,
   extractAddressFromFile,
@@ -26,6 +27,8 @@ export default function MainForm({
   const [dupWarning, setDupWarning] = useState(false);
   const [dupFolderName, setDupFolderName] = useState('');
   const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState(null);
+  const [showAddressCamera, setShowAddressCamera] = useState(false);
 
   const handleAddressBlur = async () => {
     if (!selectedCustomer || !selectedAddress) {
@@ -50,32 +53,43 @@ export default function MainForm({
     }
   };
 
-  const handleFileUploadForAddress = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const applyExtracted = async ({ address, unit }) => {
+    if (address) onAddressChange(address);
+    if (unit) onUnitChange(unit);
+    if (address) await handleAddressBlur();
+  };
+
+  const runExtraction = async (file) => {
     setExtracting(true);
+    setExtractError(null);
     try {
-      const address = await extractAddressFromFile(file);
+      const { address, unit } = await extractAddressFromFile(file);
       if (address) {
-        onAddressChange(address);
-        await handleAddressBlur();
+        await applyExtracted({ address, unit });
+        onNotification('Address extracted successfully', 'success');
       } else {
+        setExtractError('Could not find an address. Try again or type manually.');
         onNotification("Couldn't read the document. Try again or type the address manually.", 'error');
       }
     } catch (err) {
-      if (err.message?.includes('image')) {
-        onNotification('Use a photo for address extraction (PDF/Word coming later).', 'error');
-      } else {
-        onNotification("Couldn't read the document. Try again or type the address manually.", 'error');
-      }
+      const msg = err.response?.data?.error || err.message || 'Extraction failed';
+      setExtractError(msg);
+      onNotification("Couldn't read the document. Try again or type the address manually.", 'error');
     } finally {
       setExtracting(false);
-      e.target.value = '';
     }
   };
 
-  const handleCameraForAddress = async () => {
-    onNotification('Camera for address extraction coming soon', 'info');
+  const handleFileUploadForAddress = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await runExtraction(file);
+    e.target.value = '';
+  };
+
+  const handleAddressCameraCapture = async (file) => {
+    setShowAddressCamera(false);
+    await runExtraction(file);
   };
 
   const getFolderName = () => {
@@ -147,6 +161,7 @@ export default function MainForm({
               onSelectCustomer(e.target.value);
               setDupWarning(false);
             }}
+            disabled={extracting}
             style={{ width: '100%', padding: '10px 12px', background: '#0f1c34', border: '1px solid #1e3560', borderRadius: '8px', color: '#7aaad8' }}
           >
             <option value="">Select customer…</option>
@@ -164,22 +179,37 @@ export default function MainForm({
             type="text"
             placeholder="e.g. 123 Main St"
             value={selectedAddress}
-            onChange={(e) => onAddressChange(e.target.value)}
+            onChange={(e) => {
+              onAddressChange(e.target.value);
+              setExtractError(null);
+            }}
             onBlur={handleAddressBlur}
-            style={{ width: '100%', padding: '10px 12px', background: '#0f1c34', border: '1px solid #1e3560', borderRadius: '8px', color: '#7aaad8', marginBottom: '8px' }}
+            disabled={extracting}
+            style={{ width: '100%', padding: '10px 12px', background: '#0f1c34', border: '1px solid #1e3560', borderRadius: '8px', color: '#7aaad8', marginBottom: '8px', opacity: extracting ? 0.6 : 1 }}
           />
+          {extracting && (
+            <div style={{ fontSize: '11px', color: '#fbbf24', marginBottom: '8px' }}>
+              Reading document…
+            </div>
+          )}
+          {extractError && !extracting && (
+            <div style={{ fontSize: '11px', color: '#e53e3e', marginBottom: '8px' }}>
+              {extractError}
+            </div>
+          )}
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
-              onClick={handleCameraForAddress}
+              onClick={() => setShowAddressCamera(true)}
+              disabled={extracting}
               style={{
                 flex: 1,
                 padding: '8px',
                 background: '#2a3550',
                 border: '1px solid #3a5a70',
-                color: '#7aaad8',
+                color: extracting ? '#3a5a70' : '#7aaad8',
                 borderRadius: '6px',
                 fontSize: '12px',
-                cursor: 'pointer',
+                cursor: extracting ? 'not-allowed' : 'pointer',
               }}
             >
               📷 Camera
@@ -194,15 +224,15 @@ export default function MainForm({
                   color: extracting ? '#3a5a70' : '#7aaad8',
                   borderRadius: '6px',
                   fontSize: '12px',
-                  cursor: extracting ? 'wait' : 'pointer',
+                  cursor: extracting ? 'not-allowed' : 'pointer',
                   textAlign: 'center',
                 }}
               >
-                {extracting ? 'Reading…' : '📄 Upload image'}
+                {extracting ? 'Reading…' : '📄 Upload file'}
               </span>
               <input
                 type="file"
-                accept="image/*"
+                accept="image/*,.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 onChange={handleFileUploadForAddress}
                 disabled={extracting}
                 style={{ display: 'none' }}
@@ -248,7 +278,8 @@ export default function MainForm({
             value={selectedUnit}
             onChange={(e) => onUnitChange(e.target.value)}
             onBlur={handleAddressBlur}
-            style={{ width: '100%', padding: '10px 12px', background: '#0f1c34', border: '1px solid #1e3560', borderRadius: '8px', color: '#7aaad8' }}
+            disabled={extracting}
+            style={{ width: '100%', padding: '10px 12px', background: '#0f1c34', border: '1px solid #1e3560', borderRadius: '8px', color: '#7aaad8', opacity: extracting ? 0.6 : 1 }}
           />
         </div>
 
@@ -270,23 +301,30 @@ export default function MainForm({
       <div style={{ padding: '16px', borderTop: '1px solid #1a2540' }}>
         <button
           onClick={onOpenCamera}
-          disabled={!selectedCustomer || !selectedAddress}
+          disabled={!selectedCustomer || !selectedAddress || extracting}
           style={{
             width: '100%',
             padding: '12px',
-            background: selectedCustomer && selectedAddress ? '#008800' : '#004400',
+            background: selectedCustomer && selectedAddress && !extracting ? '#008800' : '#004400',
             color: '#fff',
             border: 'none',
             borderRadius: '8px',
             fontSize: '16px',
             fontWeight: '600',
-            cursor: selectedCustomer && selectedAddress ? 'pointer' : 'not-allowed',
-            opacity: selectedCustomer && selectedAddress ? 1 : 0.5,
+            cursor: selectedCustomer && selectedAddress && !extracting ? 'pointer' : 'not-allowed',
+            opacity: selectedCustomer && selectedAddress && !extracting ? 1 : 0.5,
           }}
         >
           📷 Open Camera
         </button>
       </div>
+
+      {showAddressCamera && (
+        <AddressScanCamera
+          onCapture={handleAddressCameraCapture}
+          onCancel={() => setShowAddressCamera(false)}
+        />
+      )}
     </div>
   );
 }

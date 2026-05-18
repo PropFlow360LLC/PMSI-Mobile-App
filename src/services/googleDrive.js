@@ -3,6 +3,7 @@ import axios from 'axios';
 const GOOGLE_DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3/files';
 const ROOT_FOLDER = import.meta.env.VITE_GOOGLE_DRIVE_ROOT_FOLDER || 'PMSI';
+const PMSI_FOLDER_ID = import.meta.env.VITE_GOOGLE_DRIVE_PMSI_FOLDER_ID || '';
 
 function driveHeaders(accessToken) {
   return { Authorization: `Bearer ${accessToken}` };
@@ -49,6 +50,21 @@ export function parsePropertyFolderName(folderName) {
 }
 
 async function findPmsiFolderId(accessToken) {
+  if (PMSI_FOLDER_ID) {
+    try {
+      const res = await axios.get(`${GOOGLE_DRIVE_API}/files/${PMSI_FOLDER_ID}`, {
+        params: { fields: 'id,name,mimeType,trashed' },
+        headers: driveHeaders(accessToken),
+      });
+      const folder = res.data;
+      if (folder && !folder.trashed && folder.mimeType === 'application/vnd.google-apps.folder') {
+        return folder.id;
+      }
+    } catch (err) {
+      console.warn('Configured PMSI folder ID not accessible, falling back to name search:', err.message);
+    }
+  }
+
   const pmsiRes = await axios.get(`${GOOGLE_DRIVE_API}/files`, {
     params: {
       q: `name='${escapeDriveQuery(ROOT_FOLDER)}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
@@ -213,27 +229,18 @@ export async function loadCustomersFromDrive(accessToken) {
   }
 }
 
-function readFileAsBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(',')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
 export async function extractAddressFromFile(file) {
-  if (!file.type.startsWith('image/')) {
-    throw new Error('Only image files are supported for address extraction');
-  }
+  const formData = new FormData();
+  formData.append('file', file);
 
-  const image = await readFileAsBase64(file);
-  const res = await axios.post('/api/extract-address', {
-    image,
-    mimeType: file.type,
+  const res = await axios.post('/api/extract-address', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
   });
 
-  return res.data.address || null;
+  return {
+    address: res.data.address || null,
+    unit: res.data.unit || null,
+  };
 }
 
 export async function uploadPhotoToFolder(accessToken, folderId, photo) {
