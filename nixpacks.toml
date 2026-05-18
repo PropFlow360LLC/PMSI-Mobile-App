@@ -1,9 +1,5 @@
-{
-  "providers": ["nodejs"],
-  "buildConfig": {
-    "nodejs-18": {
-      "buildCmd": "npm install && npm run build"
-    }
-  },
-  "runCmd": "npm run start"
-}
+[build]
+cmds = ["npm install && npm run build"]
+
+[start]
+cmd = "npm run start"
