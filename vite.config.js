@@ -19,8 +19,8 @@ function extractAddressApiPlugin() {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  if (env.OPENAI_API_KEY) {
-    process.env.OPENAI_API_KEY = env.OPENAI_API_KEY;
+  if (env.GOOGLE_VISION_API_KEY) {
+    process.env.GOOGLE_VISION_API_KEY = env.GOOGLE_VISION_API_KEY;
   }
 
   return {

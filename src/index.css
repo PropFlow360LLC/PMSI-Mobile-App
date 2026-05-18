@@ -71,11 +71,19 @@ html, body, #root {
 
 .form-screen-footer {
   flex-shrink: 0;
-  padding: 16px;
-  /* Safari bottom bar: safe-area often 0 in-browser — enforce minimum lift */
-  padding-bottom: max(28px, calc(env(safe-area-inset-bottom, 0px) + 20px));
+  padding: 16px 16px 0;
+  /*
+   * Safari in-browser: safe-area-inset-bottom is often 0 while the toolbar still
+   * covers ~50px. Use a fixed 56px offset + safe-area so ~28–40px stays visible
+   * below the button above the toolbar / home indicator.
+   */
+  padding-bottom: max(
+    76px,
+    calc(env(safe-area-inset-bottom, 0px) + 28px)
+  );
   border-top: 1px solid #1a2540;
   background: linear-gradient(180deg, rgba(10, 14, 39, 0.95) 0%, #0a0e27 100%);
+  box-sizing: border-box;
 }
 
 .form-screen-footer .form-primary-btn {
