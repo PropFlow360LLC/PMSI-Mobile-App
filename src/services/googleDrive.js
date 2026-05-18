@@ -1,34 +1,209 @@
 import axios from 'axios';
 
 const GOOGLE_DRIVE_API = 'https://www.googleapis.com/drive/v3';
-const OPENAI_API = 'https://api.openai.com/v1/chat/completions';
+const UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3/files';
 const ROOT_FOLDER = import.meta.env.VITE_GOOGLE_DRIVE_ROOT_FOLDER || 'PMSI';
 
-// Load list of customer folders from PMSI root
-export async function loadCustomersFromDrive(token) {
+function driveHeaders(accessToken) {
+  return { Authorization: `Bearer ${accessToken}` };
+}
+
+function escapeDriveQuery(value) {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+export function normalizeKey(value) {
+  return (value || '')
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function buildPropertyFolderName(address, unit) {
+  const name = address.trim();
+  if (unit?.trim()) return `${name} - Unit ${unit.trim()}`;
+  return name;
+}
+
+export function buildCoFolderName(coNumber) {
+  return `CO#${String(coNumber).trim()}`;
+}
+
+export function parsePropertyFolderName(folderName) {
+  const coLegacy = folderName.match(/^(.+?)\s-\sCO#(.+?)(?:\s-\sUnit\s+(.+))?$/i);
+  if (coLegacy) {
+    return {
+      address: coLegacy[1].trim(),
+      unit: (coLegacy[3] || '').trim(),
+      legacyFlatCo: coLegacy[2].trim(),
+    };
+  }
+
+  const unitMatch = folderName.match(/^(.+?)\s-\sUnit\s+(.+)$/i);
+  if (unitMatch) {
+    return { address: unitMatch[1].trim(), unit: unitMatch[2].trim(), legacyFlatCo: null };
+  }
+
+  return { address: folderName.trim(), unit: '', legacyFlatCo: null };
+}
+
+async function findPmsiFolderId(accessToken) {
+  const pmsiRes = await axios.get(`${GOOGLE_DRIVE_API}/files`, {
+    params: {
+      q: `name='${escapeDriveQuery(ROOT_FOLDER)}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: 'files(id,name)',
+      pageSize: 1,
+    },
+    headers: driveHeaders(accessToken),
+  });
+  return pmsiRes.data.files?.[0]?.id || null;
+}
+
+async function findCustomerFolderId(accessToken, customerName) {
+  const pmsiId = await findPmsiFolderId(accessToken);
+  if (!pmsiId) return null;
+
+  const custRes = await axios.get(`${GOOGLE_DRIVE_API}/files`, {
+    params: {
+      q: `name='${escapeDriveQuery(customerName)}' and '${pmsiId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: 'files(id,name)',
+      pageSize: 1,
+    },
+    headers: driveHeaders(accessToken),
+  });
+  return custRes.data.files?.[0] || null;
+}
+
+async function listChildFolders(accessToken, parentId) {
+  const res = await axios.get(`${GOOGLE_DRIVE_API}/files`, {
+    params: {
+      q: `'${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: 'files(id,name)',
+      orderBy: 'name',
+      pageSize: 200,
+    },
+    headers: driveHeaders(accessToken),
+  });
+  return res.data.files || [];
+}
+
+function propertyFoldersMatch(folderName, address, unit) {
+  const parsed = parsePropertyFolderName(folderName);
+  if (parsed.legacyFlatCo) return false;
+  return (
+    normalizeKey(parsed.address) === normalizeKey(address) &&
+    normalizeKey(parsed.unit) === normalizeKey(unit)
+  );
+}
+
+export async function checkDuplicateAddress(accessToken, customerName, address, unit) {
+  const empty = { duplicate: false, folderId: null, folderName: null, propertyFolderId: null };
+
   try {
-    // First find PMSI folder
-    const pmsiRes = await axios.get(`${GOOGLE_DRIVE_API}/files`, {
-      params: {
-        q: `name='${ROOT_FOLDER}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-        fields: 'files(id,name)',
-        pageSize: 1
-      },
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const customerFolder = await findCustomerFolderId(accessToken, customerName);
+    if (!customerFolder) return empty;
 
-    const pmsiFolder = pmsiRes.data.files?.[0];
-    if (!pmsiFolder) return [];
+    const folders = await listChildFolders(accessToken, customerFolder.id);
+    const match = folders.find((f) => propertyFoldersMatch(f.name, address, unit));
 
-    // Get all customer folders inside PMSI
+    if (!match) return empty;
+
+    return {
+      duplicate: true,
+      folderId: match.id,
+      folderName: match.name,
+      propertyFolderId: match.id,
+    };
+  } catch (err) {
+    console.error('Duplicate check error:', err);
+    return empty;
+  }
+}
+
+async function findOrCreateFolder(accessToken, parentId, name) {
+  const res = await axios.get(`${GOOGLE_DRIVE_API}/files`, {
+    params: {
+      q: `name='${escapeDriveQuery(name)}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: 'files(id,name)',
+      pageSize: 1,
+    },
+    headers: driveHeaders(accessToken),
+  });
+
+  if (res.data.files?.length) {
+    return res.data.files[0];
+  }
+
+  const createRes = await axios.post(
+    `${GOOGLE_DRIVE_API}/files`,
+    {
+      name,
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: [parentId],
+    },
+    { headers: driveHeaders(accessToken) }
+  );
+
+  return { id: createRes.data.id, name };
+}
+
+export async function resolveUploadFolder(
+  accessToken,
+  customerName,
+  address,
+  unit,
+  coNumber
+) {
+  const customerFolder = await findCustomerFolderId(accessToken, customerName);
+  if (!customerFolder) throw new Error('Customer folder not found');
+
+  const match = await checkDuplicateAddress(accessToken, customerName, address, unit);
+  let propertyFolderId;
+  let propertyFolderName;
+
+  if (match.duplicate) {
+    propertyFolderId = match.propertyFolderId;
+    propertyFolderName = match.folderName;
+  } else {
+    const propertyName = buildPropertyFolderName(address, unit);
+    const created = await findOrCreateFolder(accessToken, customerFolder.id, propertyName);
+    propertyFolderId = created.id;
+    propertyFolderName = created.name;
+  }
+
+  if (coNumber?.trim()) {
+    const coName = buildCoFolderName(coNumber);
+    const coFolder = await findOrCreateFolder(accessToken, propertyFolderId, coName);
+    return {
+      folderId: coFolder.id,
+      folderName: `${propertyFolderName} / ${coFolder.name}`,
+      propertyFolderId,
+      isChangeOrder: true,
+    };
+  }
+
+  return {
+    folderId: propertyFolderId,
+    folderName: propertyFolderName,
+    propertyFolderId,
+    isChangeOrder: false,
+  };
+}
+
+export async function loadCustomersFromDrive(accessToken) {
+  try {
+    const pmsiId = await findPmsiFolderId(accessToken);
+    if (!pmsiId) return [];
+
     const custRes = await axios.get(`${GOOGLE_DRIVE_API}/files`, {
       params: {
-        q: `'${pmsiFolder.id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+        q: `'${pmsiId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
         fields: 'files(id,name)',
         orderBy: 'name',
-        pageSize: 100
+        pageSize: 100,
       },
-      headers: { Authorization: `Bearer ${token}` }
+      headers: driveHeaders(accessToken),
     });
 
     return custRes.data.files || [];
@@ -38,137 +213,63 @@ export async function loadCustomersFromDrive(token) {
   }
 }
 
-// Check if address folder exists under customer
-export async function checkDuplicateAddress(customer, address) {
-  // This will be called after getting token from gAuth
-  // For now, return false
-  return false;
-}
-
-// Extract address from uploaded file using OpenAI Vision
-export async function extractAddressFromFile(file) {
-  try {
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    return new Promise((resolve, reject) => {
-      reader.onload = async () => {
-        const base64 = reader.result.split(',')[1];
-        const isImage = file.type.startsWith('image/');
-        const mimeType = isImage ? file.type : 'image/jpeg';
-
-        try {
-          const res = await axios.post(OPENAI_API, {
-            model: 'gpt-4o-mini',
-            messages: [
-              {
-                role: 'user',
-                content: [
-                  {
-                    type: 'text',
-                    text: 'Extract the property address from this document. Return ONLY the house number and street name (e.g., "123 Main St"). No city, state, or zip. If you cannot find an address, return "NOT_FOUND".'
-                  },
-                  {
-                    type: 'image_url',
-                    image_url: { url: `data:${mimeType};base64,${base64}`, detail: 'low' }
-                  }
-                ]
-              }
-            ],
-            max_tokens: 50
-          }, {
-            headers: { Authorization: `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}` }
-          });
-
-          const text = res.data.choices?.[0]?.message?.content?.trim() || '';
-          if (text === 'NOT_FOUND' || !text) {
-            resolve(null);
-          } else {
-            resolve(text);
-          }
-        } catch (err) {
-          reject(err);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
-  } catch (err) {
-    console.error('Extract address error:', err);
-    throw err;
-  }
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
-// Upload photos to Google Drive
-export async function uploadPhotosToDrive(token, customer, address, unit, coDuplicateChoice, coNumber, photos) {
-  try {
-    // Build folder name
-    let folderName = address;
-    if (coNumber) folderName += ` - CO#${coNumber}`;
-    if (unit) folderName += ` - Unit ${unit}`;
-
-    // Find PMSI folder
-    const pmsiRes = await axios.get(`${GOOGLE_DRIVE_API}/files`, {
-      params: {
-        q: `name='${ROOT_FOLDER}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-        fields: 'files(id)',
-        pageSize: 1
-      },
-      headers: { Authorization: `Bearer ${token}` }
-    });
-
-    const pmsiId = pmsiRes.data.files?.[0]?.id;
-    if (!pmsiId) throw new Error('PMSI folder not found');
-
-    // Find or verify customer folder
-    const custRes = await axios.get(`${GOOGLE_DRIVE_API}/files`, {
-      params: {
-        q: `name='${customer}' and '${pmsiId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-        fields: 'files(id)',
-        pageSize: 1
-      },
-      headers: { Authorization: `Bearer ${token}` }
-    });
-
-    const custId = custRes.data.files?.[0]?.id;
-    if (!custId) throw new Error('Customer folder not found');
-
-    // Find or create address folder
-    let addressFolderId;
-    const addrRes = await axios.get(`${GOOGLE_DRIVE_API}/files`, {
-      params: {
-        q: `name='${folderName}' and '${custId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-        fields: 'files(id)',
-        pageSize: 1
-      },
-      headers: { Authorization: `Bearer ${token}` }
-    });
-
-    if (addrRes.data.files?.length) {
-      addressFolderId = addrRes.data.files[0].id;
-    } else {
-      // Create new folder
-      const createRes = await axios.post(`${GOOGLE_DRIVE_API}/files`, {
-        name: folderName,
-        mimeType: 'application/vnd.google-apps.folder',
-        parents: [custId]
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      addressFolderId = createRes.data.id;
-    }
-
-    // Upload all photos
-    for (const photo of photos) {
-      const formData = new FormData();
-      formData.append('metadata', new Blob([JSON.stringify({ name: photo.name, parents: [addressFolderId] })], { type: 'application/json' }));
-      formData.append('file', photo);
-
-      await axios.post(`${GOOGLE_DRIVE_API}/files?uploadType=multipart&fields=id`, formData, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-    }
-
-    return true;
-  } catch (err) {
-    console.error('Upload error:', err);
-    throw err;
+export async function extractAddressFromFile(file) {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Only image files are supported for address extraction');
   }
+
+  const image = await readFileAsBase64(file);
+  const res = await axios.post('/api/extract-address', {
+    image,
+    mimeType: file.type,
+  });
+
+  return res.data.address || null;
+}
+
+export async function uploadPhotoToFolder(accessToken, folderId, photo) {
+  const formData = new FormData();
+  formData.append(
+    'metadata',
+    new Blob([JSON.stringify({ name: photo.name, parents: [folderId] })], {
+      type: 'application/json',
+    })
+  );
+  formData.append('file', photo);
+
+  await axios.post(`${UPLOAD_API}?uploadType=multipart&fields=id`, formData, {
+    headers: driveHeaders(accessToken),
+  });
+}
+
+export async function uploadPhotosToDrive(
+  accessToken,
+  customer,
+  address,
+  unit,
+  coNumber,
+  photos
+) {
+  const { folderId } = await resolveUploadFolder(
+    accessToken,
+    customer,
+    address,
+    unit,
+    coNumber
+  );
+
+  for (const photo of photos) {
+    await uploadPhotoToFolder(accessToken, folderId, photo);
+  }
+
+  return true;
 }

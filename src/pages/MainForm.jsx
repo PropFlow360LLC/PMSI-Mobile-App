@@ -1,5 +1,10 @@
 import { useState } from 'react';
-import { checkDuplicateAddress, extractAddressFromFile } from '../services/googleDrive';
+import {
+  checkDuplicateAddress,
+  extractAddressFromFile,
+  buildPropertyFolderName,
+  buildCoFolderName,
+} from '../services/googleDrive';
 
 export default function MainForm({
   user,
@@ -8,24 +13,40 @@ export default function MainForm({
   selectedAddress,
   selectedUnit,
   coNumber,
+  queueCounts,
+  getAccessToken,
   onSelectCustomer,
   onAddressChange,
   onUnitChange,
   onCoNumberChange,
   onOpenCamera,
   onLogout,
-  onNotification
+  onNotification,
 }) {
-  const [dupWarning, setDupWarning] = useState(null);
+  const [dupWarning, setDupWarning] = useState(false);
+  const [dupFolderName, setDupFolderName] = useState('');
   const [extracting, setExtracting] = useState(false);
 
   const handleAddressBlur = async () => {
-    if (!selectedCustomer || !selectedAddress) return;
-    const isDup = await checkDuplicateAddress(selectedCustomer, selectedAddress);
-    if (isDup) {
-      setDupWarning(true);
-    } else {
+    if (!selectedCustomer || !selectedAddress) {
       setDupWarning(false);
+      setDupFolderName('');
+      return;
+    }
+
+    try {
+      const accessToken = await getAccessToken();
+      const match = await checkDuplicateAddress(
+        accessToken,
+        selectedCustomer,
+        selectedAddress,
+        selectedUnit
+      );
+      setDupWarning(match.duplicate);
+      setDupFolderName(match.folderName || '');
+    } catch {
+      setDupWarning(false);
+      setDupFolderName('');
     }
   };
 
@@ -37,28 +58,38 @@ export default function MainForm({
       const address = await extractAddressFromFile(file);
       if (address) {
         onAddressChange(address);
-        handleAddressBlur();
+        await handleAddressBlur();
       } else {
         onNotification("Couldn't read the document. Try again or type the address manually.", 'error');
       }
     } catch (err) {
-      onNotification("Couldn't read the document. Try again or type the address manually.", 'error');
+      if (err.message?.includes('image')) {
+        onNotification('Use a photo for address extraction (PDF/Word coming later).', 'error');
+      } else {
+        onNotification("Couldn't read the document. Try again or type the address manually.", 'error');
+      }
     } finally {
       setExtracting(false);
+      e.target.value = '';
     }
   };
 
   const handleCameraForAddress = async () => {
-    // Open camera, snap photo, extract address
     onNotification('Camera for address extraction coming soon', 'info');
   };
 
   const getFolderName = () => {
-    let name = selectedAddress;
-    if (coNumber) name += ` - CO#${coNumber}`;
-    if (selectedUnit) name += ` - Unit ${selectedUnit}`;
-    return name;
+    const propertyName = buildPropertyFolderName(selectedAddress, selectedUnit);
+    if (coNumber?.trim()) {
+      return `${propertyName} / ${buildCoFolderName(coNumber)}`;
+    }
+    return propertyName;
   };
+
+  const queueLabel =
+    queueCounts.total > 0
+      ? `${queueCounts.pending + queueCounts.failed} queued · ${queueCounts.uploading} uploading`
+      : null;
 
   return (
     <div style={{
@@ -66,15 +97,14 @@ export default function MainForm({
       flexDirection: 'column',
       height: '100vh',
       background: 'linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%)',
-      overflow: 'hidden'
+      overflow: 'hidden',
     }}>
-      {/* Header */}
       <div style={{
         padding: '12px 16px',
         borderBottom: '1px solid #1a2540',
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'center'
+        alignItems: 'center',
       }}>
         <div style={{ fontSize: '12px', color: '#7aaad8' }}>
           {user?.name || user?.email || 'User'}
@@ -87,33 +117,45 @@ export default function MainForm({
             color: '#e53e3e',
             cursor: 'pointer',
             fontSize: '12px',
-            textDecoration: 'underline'
+            textDecoration: 'underline',
           }}
         >
           Sign out
         </button>
       </div>
 
-      {/* Form */}
+      {queueLabel && (
+        <div style={{
+          padding: '8px 16px',
+          background: '#1a1000',
+          borderBottom: '1px solid #854d0e',
+          fontSize: '11px',
+          color: '#fbbf24',
+        }}>
+          📤 Upload queue: {queueLabel}
+        </div>
+      )}
+
       <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
-        {/* Customer */}
         <div style={{ marginBottom: '16px' }}>
           <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#4a6fa8', marginBottom: '6px', textTransform: 'uppercase' }}>
             👤 Customer *
           </label>
           <select
             value={selectedCustomer}
-            onChange={(e) => onSelectCustomer(e.target.value)}
+            onChange={(e) => {
+              onSelectCustomer(e.target.value);
+              setDupWarning(false);
+            }}
             style={{ width: '100%', padding: '10px 12px', background: '#0f1c34', border: '1px solid #1e3560', borderRadius: '8px', color: '#7aaad8' }}
           >
             <option value="">Select customer…</option>
-            {customers.map(c => (
+            {customers.map((c) => (
               <option key={c.id} value={c.name}>{c.name}</option>
             ))}
           </select>
         </div>
 
-        {/* Address */}
         <div style={{ marginBottom: '16px' }}>
           <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#4a6fa8', marginBottom: '6px', textTransform: 'uppercase' }}>
             📍 Property Address *
@@ -137,38 +179,38 @@ export default function MainForm({
                 color: '#7aaad8',
                 borderRadius: '6px',
                 fontSize: '12px',
-                cursor: 'pointer'
+                cursor: 'pointer',
               }}
             >
               📷 Camera
             </button>
             <label style={{ flex: 1 }}>
-              <button
-                component="span"
+              <span
                 style={{
-                  flex: 1,
+                  display: 'block',
                   padding: '8px',
                   background: '#2a3550',
                   border: '1px solid #3a5a70',
-                  color: '#7aaad8',
+                  color: extracting ? '#3a5a70' : '#7aaad8',
                   borderRadius: '6px',
                   fontSize: '12px',
-                  cursor: 'pointer'
+                  cursor: extracting ? 'wait' : 'pointer',
+                  textAlign: 'center',
                 }}
               >
-                📄 Upload PDF
-              </button>
+                {extracting ? 'Reading…' : '📄 Upload image'}
+              </span>
               <input
                 type="file"
-                accept=".pdf,.docx,.doc,image/*"
+                accept="image/*"
                 onChange={handleFileUploadForAddress}
+                disabled={extracting}
                 style={{ display: 'none' }}
               />
             </label>
           </div>
         </div>
 
-        {/* Duplicate Warning */}
         {dupWarning && (
           <div style={{
             background: '#1a1000',
@@ -176,22 +218,26 @@ export default function MainForm({
             borderRadius: '8px',
             padding: '12px',
             marginBottom: '16px',
-            fontSize: '12px'
+            fontSize: '12px',
           }}>
             <div style={{ color: '#fbbf24', fontWeight: '700', marginBottom: '8px' }}>⚠️ Address already exists</div>
-            <div style={{ color: '#3a5a70', fontSize: '11px', marginBottom: '10px' }}>Is this a change order? If no, it will add to the existing folder.</div>
+            <div style={{ color: '#3a5a70', fontSize: '11px', marginBottom: '6px' }}>
+              Existing folder: <span style={{ color: '#7aaad8' }}>{dupFolderName}</span>
+            </div>
+            <div style={{ color: '#3a5a70', fontSize: '11px', marginBottom: '10px' }}>
+              Leave CO# blank to add photos to that folder. Enter a CO# to create a change-order subfolder.
+            </div>
             <input
               type="text"
-              placeholder="Enter CO# if different order (e.g., 2, 3)"
+              placeholder="Enter CO# for change order (e.g., 2, 3)"
               value={coNumber}
               onChange={(e) => onCoNumberChange(e.target.value)}
               style={{ width: '100%', padding: '8px', background: '#0f1c34', border: '1px solid #2a3550', borderRadius: '6px', color: '#7aaad8', fontSize: '12px' }}
             />
-            <div style={{ fontSize: '10px', color: '#3a5a80', marginTop: '6px' }}>Folder: {getFolderName()}</div>
+            <div style={{ fontSize: '10px', color: '#3a5a80', marginTop: '6px' }}>Upload target: {getFolderName()}</div>
           </div>
         )}
 
-        {/* Unit */}
         <div style={{ marginBottom: '16px' }}>
           <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#4a6fa8', marginBottom: '6px', textTransform: 'uppercase' }}>
             🚪 Unit (optional)
@@ -201,11 +247,11 @@ export default function MainForm({
             placeholder="e.g. 2b, 3a"
             value={selectedUnit}
             onChange={(e) => onUnitChange(e.target.value)}
+            onBlur={handleAddressBlur}
             style={{ width: '100%', padding: '10px 12px', background: '#0f1c34', border: '1px solid #1e3560', borderRadius: '8px', color: '#7aaad8' }}
           />
         </div>
 
-        {/* Folder path preview */}
         {selectedCustomer && selectedAddress && (
           <div style={{
             background: '#0a1525',
@@ -214,14 +260,13 @@ export default function MainForm({
             padding: '10px 12px',
             marginBottom: '16px',
             fontSize: '11px',
-            color: '#3a5a80'
+            color: '#3a5a80',
           }}>
             📁 PMSI / <span style={{ color: '#7aaad8' }}>{selectedCustomer}</span> / <span style={{ color: '#7aaad8' }}>{getFolderName()}</span>
           </div>
         )}
       </div>
 
-      {/* Camera Button */}
       <div style={{ padding: '16px', borderTop: '1px solid #1a2540' }}>
         <button
           onClick={onOpenCamera}
@@ -236,7 +281,7 @@ export default function MainForm({
             fontSize: '16px',
             fontWeight: '600',
             cursor: selectedCustomer && selectedAddress ? 'pointer' : 'not-allowed',
-            opacity: selectedCustomer && selectedAddress ? 1 : 0.5
+            opacity: selectedCustomer && selectedAddress ? 1 : 0.5,
           }}
         >
           📷 Open Camera
