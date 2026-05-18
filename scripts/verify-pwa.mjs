@@ -11,10 +11,16 @@ const requiredIcons = [
   'icon-maskable-192.png',
   'icon-maskable-512.png',
   'apple-touch-icon.png',
-  'favicon.svg',
 ];
 
-const requiredFiles = ['manifest.json', 'sw.js', ...requiredIcons];
+const requiredFiles = [
+  'manifest.json',
+  'sw.js',
+  'branding/pmsi-logo.png',
+  'favicon-16.png',
+  'favicon-32.png',
+  ...requiredIcons,
+];
 
 let failed = false;
 
@@ -67,6 +73,7 @@ const appleTags = [
   'apple-mobile-web-app-title',
   'apple-touch-icon',
   'rel="manifest"',
+  'pmsi-logo.png',
 ];
 
 for (const tag of appleTags) {

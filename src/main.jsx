@@ -7,6 +7,9 @@ import { registerServiceWorker, listenForInstallPrompt } from './registerPwa';
 listenForInstallPrompt();
 registerServiceWorker();
 
+const splash = document.getElementById('pmsi-splash');
+if (splash) splash.classList.add('pmsi-splash--hide');
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />

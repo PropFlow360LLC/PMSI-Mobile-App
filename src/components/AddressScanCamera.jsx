@@ -56,63 +56,50 @@ export default function AddressScanCamera({ onCapture, onCancel }) {
         background: 'rgba(0,0,0,0.95)',
         display: 'flex',
         flexDirection: 'column',
+        height: '100dvh',
       }}
     >
-      <div style={{ padding: '12px 16px', color: '#7aaad8', fontSize: '14px', textAlign: 'center' }}>
+      <div
+        style={{
+          padding: '12px 16px',
+          paddingTop: 'max(12px, env(safe-area-inset-top, 0px))',
+          color: '#7aaad8',
+          fontSize: '14px',
+          textAlign: 'center',
+        }}
+      >
         Point at address or scope document
       </div>
 
-      <div style={{ flex: 1, position: 'relative', background: '#000' }}>
+      <div className="camera-preview" style={{ flex: 1 }}>
         {error ? (
           <div style={{ padding: '24px', color: '#e53e3e', textAlign: 'center' }}>{error}</div>
         ) : (
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          />
+          <video ref={videoRef} autoPlay playsInline className="camera-video" />
         )}
         <canvas ref={canvasRef} style={{ display: 'none' }} />
-      </div>
-
-      <div
-        style={{
-          padding: '16px',
-          display: 'flex',
-          gap: '12px',
-          justifyContent: 'center',
-        }}
-      >
-        <button
-          onClick={capture}
-          disabled={!ready || capturing || !!error}
-          style={{
-            padding: '12px 24px',
-            background: '#008800',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '8px',
-            fontWeight: '600',
-            opacity: ready && !capturing ? 1 : 0.5,
-            cursor: ready && !capturing ? 'pointer' : 'not-allowed',
-          }}
+        <div className="camera-bottom-shade" aria-hidden="true" />
+        <div
+          className="camera-controls"
+          style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)', padding: 0 }}
         >
-          {capturing ? 'Capturing…' : 'Capture'}
-        </button>
-        <button
-          onClick={onCancel}
-          style={{
-            padding: '12px 24px',
-            background: '#333',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: 'pointer',
-          }}
-        >
-          Cancel
-        </button>
+          <button
+            type="button"
+            onClick={capture}
+            disabled={!ready || capturing || !!error}
+            className="camera-action-btn camera-done-btn"
+            style={{
+              opacity: ready && !capturing ? 1 : 0.5,
+              cursor: ready && !capturing ? 'pointer' : 'not-allowed',
+              minWidth: '120px',
+            }}
+          >
+            {capturing ? 'Capturing…' : 'Capture'}
+          </button>
+          <button type="button" onClick={onCancel} className="camera-action-btn camera-cancel-btn">
+            Cancel
+          </button>
+        </div>
       </div>
     </div>
   );

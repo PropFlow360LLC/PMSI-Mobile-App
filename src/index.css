@@ -65,3 +65,93 @@ button:active {
 ::-webkit-scrollbar-thumb:hover {
   background: #2a4570;
 }
+
+/* Camera — controls overlaid for thumb reach + iPhone safe area */
+.camera-screen {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  background: #000;
+}
+
+.camera-preview {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+.camera-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.camera-bottom-shade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 220px;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.85) 100%);
+}
+
+.camera-status-badge {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.camera-thumbs {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  overflow-x: auto;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.camera-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  align-items: center;
+  padding: 0 16px;
+}
+
+.camera-capture-btn {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 3px solid #00ff00;
+  flex-shrink: 0;
+}
+
+.camera-action-btn {
+  padding: 12px 20px;
+  font-size: 14px;
+  border-radius: 8px;
+}
+
+.camera-done-btn {
+  background: #00ff00;
+  color: #000;
+}
+
+.camera-cancel-btn {
+  background: #333;
+  color: #fff;
+}

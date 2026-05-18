@@ -1,40 +1,57 @@
 import sharp from 'sharp';
-import { writeFileSync, mkdirSync } from 'fs';
+import { existsSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(__dirname, '..', 'public');
-mkdirSync(publicDir, { recursive: true });
+const logoPath = join(publicDir, 'branding', 'pmsi-logo.png');
 
-const svgIcon = (size, maskable = false) => {
-  const pad = maskable ? Math.round(size * 0.1) : 0;
+if (!existsSync(logoPath)) {
+  console.error('Missing logo at public/branding/pmsi-logo.png');
+  process.exit(1);
+}
+
+const BLACK = { r: 0, g: 0, b: 0, alpha: 1 };
+
+async function squareIcon(name, size, { maskable = false } = {}) {
+  const pad = maskable ? Math.round(size * 0.12) : Math.round(size * 0.08);
   const inner = size - pad * 2;
-  return Buffer.from(`
-<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-  <rect width="${size}" height="${size}" rx="${maskable ? size * 0.2 : size * 0.12}" fill="#008800"/>
-  <rect x="${pad}" y="${pad}" width="${inner}" height="${inner}" rx="${maskable ? inner * 0.15 : inner * 0.1}" fill="#0a0e27"/>
-  <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle"
-    font-family="Arial,Helvetica,sans-serif" font-weight="700" font-size="${inner * 0.32}" fill="#00FF00">PMSI</text>
-</svg>`);
-};
 
-const faviconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="6" fill="#008800"/>
-  <text x="16" y="18" text-anchor="middle" font-family="Arial,sans-serif" font-weight="700" font-size="10" fill="#fff">P</text>
-</svg>`;
+  const logo = await sharp(logoPath)
+    .resize(inner, inner, { fit: 'contain', background: BLACK })
+    .png()
+    .toBuffer();
 
-async function png(name, size, maskable = false) {
-  await sharp(svgIcon(size, maskable)).png().toFile(join(publicDir, name));
+  await sharp({
+    create: {
+      width: size,
+      height: size,
+      channels: 4,
+      background: BLACK,
+    },
+  })
+    .composite([{ input: logo, gravity: 'centre' }])
+    .png()
+    .toFile(join(publicDir, name));
+
   console.log('Wrote', name);
 }
 
-await png('icon-192.png', 192);
-await png('icon-512.png', 512);
-await png('icon-maskable-192.png', 192, true);
-await png('icon-maskable-512.png', 512, true);
-await sharp(svgIcon(180)).png().toFile(join(publicDir, 'apple-touch-icon.png'));
-console.log('Wrote apple-touch-icon.png');
+await squareIcon('icon-192.png', 192);
+await squareIcon('icon-512.png', 512);
+await squareIcon('icon-maskable-192.png', 192, { maskable: true });
+await squareIcon('icon-maskable-512.png', 512, { maskable: true });
+await squareIcon('apple-touch-icon.png', 180);
 
-writeFileSync(join(publicDir, 'favicon.svg'), faviconSvg);
-console.log('Wrote favicon.svg');
+await sharp(logoPath)
+  .resize(32, 32, { fit: 'contain', background: BLACK })
+  .png()
+  .toFile(join(publicDir, 'favicon-32.png'));
+console.log('Wrote favicon-32.png');
+
+await sharp(logoPath)
+  .resize(16, 16, { fit: 'contain', background: BLACK })
+  .png()
+  .toFile(join(publicDir, 'favicon-16.png'));
+console.log('Wrote favicon-16.png');

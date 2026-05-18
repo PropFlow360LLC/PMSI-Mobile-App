@@ -32,14 +32,25 @@ export default function Login({ onLogin, onNotification }) {
       justifyContent: 'center',
       alignItems: 'center',
       height: '100vh',
-      background: 'linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%)',
+      background: '#000',
       padding: '20px',
-      textAlign: 'center'
+      paddingTop: 'max(20px, env(safe-area-inset-top, 0px))',
+      paddingBottom: 'max(20px, env(safe-area-inset-bottom, 0px))',
+      textAlign: 'center',
     }}>
-      <div style={{ marginBottom: '32px' }}>
-        <div style={{ fontSize: '56px', marginBottom: '16px' }}>📱</div>
-        <div style={{ fontSize: '24px', fontWeight: '600', marginBottom: '8px' }}>PMSI Mobile App</div>
-        <div style={{ fontSize: '14px', color: '#7aaad8' }}>Property Maintenance Services Indy</div>
+      <div style={{ marginBottom: '28px', width: '100%', maxWidth: '340px' }}>
+        <img
+          src="/branding/pmsi-logo.png"
+          alt="Property Maintenance Services Indy, LLC"
+          style={{
+            width: '100%',
+            maxWidth: '320px',
+            height: 'auto',
+            display: 'block',
+            margin: '0 auto 12px',
+          }}
+        />
+        <div style={{ fontSize: '14px', color: '#7aaad8' }}>Field photo capture &amp; upload</div>
       </div>
 
       <button
@@ -57,7 +68,7 @@ export default function Login({ onLogin, onNotification }) {
           fontWeight: '600',
           cursor: ready && !signingIn ? 'pointer' : 'not-allowed',
           opacity: ready && !signingIn ? 1 : 0.6,
-          marginBottom: '20px'
+          marginBottom: '20px',
         }}
       >
         {signingIn ? 'Signing in…' : '🔑 Sign in with Google'}
