@@ -1,27 +1,27 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { loadGoogleScript, signInWithGoogle } from '../services/googleAuth';
 
-export default function Login({ onLogin }) {
+export default function Login({ onLogin, onNotification }) {
+  const [ready, setReady] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
+
   useEffect(() => {
-    // Load Google API
-    const script = document.createElement('script');
-    script.src = 'https://apis.google.com/js/platform.js';
-    script.onload = () => {
-      window.gapi.load('auth2', () => {
-        window.gapi.auth2.init({
-          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-          scope: 'https://www.googleapis.com/auth/drive'
-        });
-      });
-    };
-    document.head.appendChild(script);
-  }, []);
+    loadGoogleScript()
+      .then(() => setReady(true))
+      .catch(() => onNotification?.('Failed to load Google sign-in', 'error'));
+  }, [onNotification]);
 
-  const handleSignIn = () => {
-    if (window.gapi && window.gapi.auth2) {
-      window.gapi.auth2.getAuthInstance().signIn().then(() => {
-        const profile = window.gapi.auth2.getAuthInstance().currentUser.get().getBasicProfile();
-        onLogin(profile);
-      });
+  const handleSignIn = async () => {
+    if (!ready || signingIn) return;
+    setSigningIn(true);
+    try {
+      const session = await signInWithGoogle();
+      await onLogin(session);
+    } catch (err) {
+      console.error('Sign in error:', err);
+      onNotification?.('Sign in failed. Please try again.', 'error');
+    } finally {
+      setSigningIn(false);
     }
   };
 
@@ -44,6 +44,7 @@ export default function Login({ onLogin }) {
 
       <button
         onClick={handleSignIn}
+        disabled={!ready || signingIn}
         style={{
           width: '100%',
           maxWidth: '320px',
@@ -54,11 +55,12 @@ export default function Login({ onLogin }) {
           borderRadius: '8px',
           fontSize: '16px',
           fontWeight: '600',
-          cursor: 'pointer',
+          cursor: ready && !signingIn ? 'pointer' : 'not-allowed',
+          opacity: ready && !signingIn ? 1 : 0.6,
           marginBottom: '20px'
         }}
       >
-        🔑 Sign in with Google
+        {signingIn ? 'Signing in…' : '🔑 Sign in with Google'}
       </button>
 
       <div style={{ fontSize: '12px', color: '#3a5a70', maxWidth: '280px' }}>

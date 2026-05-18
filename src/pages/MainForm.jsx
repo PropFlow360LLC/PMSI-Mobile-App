@@ -7,15 +7,16 @@ export default function MainForm({
   selectedCustomer,
   selectedAddress,
   selectedUnit,
+  coNumber,
   onSelectCustomer,
   onAddressChange,
   onUnitChange,
+  onCoNumberChange,
   onOpenCamera,
   onLogout,
   onNotification
 }) {
   const [dupWarning, setDupWarning] = useState(null);
-  const [dupCO, setDupCO] = useState('');
   const [extracting, setExtracting] = useState(false);
 
   const handleAddressBlur = async () => {
@@ -54,7 +55,7 @@ export default function MainForm({
 
   const getFolderName = () => {
     let name = selectedAddress;
-    if (dupCO) name += ` - CO#${dupCO}`;
+    if (coNumber) name += ` - CO#${coNumber}`;
     if (selectedUnit) name += ` - Unit ${selectedUnit}`;
     return name;
   };
@@ -76,7 +77,7 @@ export default function MainForm({
         alignItems: 'center'
       }}>
         <div style={{ fontSize: '12px', color: '#7aaad8' }}>
-          {user?.getName?.() || user?.email || 'User'}
+          {user?.name || user?.email || 'User'}
         </div>
         <button
           onClick={onLogout}
@@ -182,8 +183,8 @@ export default function MainForm({
             <input
               type="text"
               placeholder="Enter CO# if different order (e.g., 2, 3)"
-              value={dupCO}
-              onChange={(e) => setDupCO(e.target.value)}
+              value={coNumber}
+              onChange={(e) => onCoNumberChange(e.target.value)}
               style={{ width: '100%', padding: '8px', background: '#0f1c34', border: '1px solid #2a3550', borderRadius: '6px', color: '#7aaad8', fontSize: '12px' }}
             />
             <div style={{ fontSize: '10px', color: '#3a5a80', marginTop: '6px' }}>Folder: {getFolderName()}</div>
