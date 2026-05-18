@@ -1,0 +1,9 @@
+{
+  "providers": ["nodejs"],
+  "buildConfig": {
+    "nodejs-18": {
+      "buildCmd": "npm install && npm run build"
+    }
+  },
+  "runCmd": "npm run start"
+}
