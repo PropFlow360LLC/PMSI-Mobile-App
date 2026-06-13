@@ -3,7 +3,7 @@ import Login from './pages/Login';
 import MainForm from './pages/MainForm';
 import Camera from './pages/Camera';
 import ReviewUploads from './pages/ReviewUploads';
-import { loadCustomersFromDrive } from './services/googleDrive';
+import { loadCustomersFromDrive, deleteDriveFile } from './services/googleDrive';
 import {
   loadGoogleScript,
   loadSession,
@@ -11,8 +11,20 @@ import {
   revokeAccessToken,
   ensureValidAccessToken,
 } from './services/googleAuth';
-import { uploadPhotoWithQueue, processUploadQueue } from './services/uploadService';
-import { getQueueCounts, getQueuedUploads, retryQueuedUpload, storedBlobToFile } from './services/uploadQueue';
+import {
+  uploadPhotoWithQueue,
+  processUploadQueue,
+  registerUploadAbort,
+  cancelUpload,
+  cancelQueueProcessing,
+} from './services/uploadService';
+import {
+  getQueueCounts,
+  getQueuedUploads,
+  retryQueuedUpload,
+  removeUpload,
+  storedBlobToFile,
+} from './services/uploadQueue';
 
 function createPreviewUrl(file) {
   if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
@@ -35,7 +47,9 @@ export default function App() {
   const [queueCounts, setQueueCounts] = useState({ total: 0, pending: 0, failed: 0, uploading: 0 });
   const [uploadItems, setUploadItems] = useState([]);
   const [returnScreen, setReturnScreen] = useState('form');
+  const [removingId, setRemovingId] = useState(null);
   const processingQueue = useRef(false);
+  const skippedQueueIds = useRef(new Set());
   const uploadItemsRef = useRef(uploadItems);
 
   useEffect(() => {
@@ -143,7 +157,16 @@ export default function App() {
     return counts;
   }, []);
 
-  const handleQueueProgress = useCallback(({ id, status, error }) => {
+  const handleQueueProgress = useCallback(({ id, status, error, driveFileId }) => {
+    if (status === 'cancelled') {
+      setUploadItems((prev) => {
+        const removed = prev.find((item) => item.queueId === id || item.id === id);
+        if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+        return prev.filter((item) => item.queueId !== id && item.id !== id);
+      });
+      return;
+    }
+
     const mapped =
       status === 'uploaded'
         ? 'completed'
@@ -152,10 +175,16 @@ export default function App() {
           : status === 'failed'
             ? 'failed'
             : 'queued';
+
     setUploadItems((prev) =>
       prev.map((item) =>
         item.queueId === id || item.id === id
-          ? { ...item, status: mapped, error: error || item.error }
+          ? {
+              ...item,
+              status: mapped,
+              error: error || item.error,
+              ...(driveFileId ? { driveFileId } : {}),
+            }
           : item
       )
     );
@@ -170,7 +199,10 @@ export default function App() {
       if (!session) return;
 
       processingQueue.current = true;
-      const result = await processUploadQueue(getAccessToken, { onProgress: handleQueueProgress });
+      const result = await processUploadQueue(getAccessToken, {
+        onProgress: handleQueueProgress,
+        shouldSkip: (id) => skippedQueueIds.current.has(id),
+      });
       await refreshQueueCounts();
       await syncQueueToUploadItems();
 
@@ -285,6 +317,8 @@ export default function App() {
 
       const id = `upload_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
       const previewUrl = createPreviewUrl(file);
+      const controller = new AbortController();
+      registerUploadAbort(id, controller);
 
       upsertUploadItem(id, {
         fileName: file.name,
@@ -303,10 +337,20 @@ export default function App() {
         coNumber,
         file,
         queueOnFailure: true,
+        uploadId: id,
+        signal: controller.signal,
       })
         .then(async (result) => {
+          if (result.cancelled) {
+            setUploadItems((prev) => {
+              const item = prev.find((i) => i.id === id);
+              if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
+              return prev.filter((i) => i.id !== id);
+            });
+            return;
+          }
           if (result.success) {
-            upsertUploadItem(id, { status: 'completed' });
+            upsertUploadItem(id, { status: 'completed', driveFileId: result.driveFileId });
           } else if (result.queued) {
             upsertUploadItem(id, {
               status: 'queued',
@@ -355,6 +399,7 @@ export default function App() {
   };
 
   const handleRetryUpload = async (queueId) => {
+    skippedQueueIds.current.delete(queueId);
     await retryQueuedUpload(queueId);
     setUploadItems((prev) =>
       prev.map((item) =>
@@ -363,6 +408,49 @@ export default function App() {
     );
     await refreshQueueCounts();
     runQueueProcessor();
+  };
+
+  const handleRemoveUpload = async (item) => {
+    setRemovingId(item.id);
+    try {
+      if (item.status === 'uploading') {
+        cancelUpload(item.id);
+        cancelQueueProcessing(item.queueId || item.id);
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      }
+
+      if (item.status === 'completed' && item.driveFileId) {
+        const token = await getAccessToken();
+        await deleteDriveFile(token, item.driveFileId);
+      }
+
+      const queueKey = item.queueId || (item.status !== 'completed' ? item.id : null);
+      if (queueKey) {
+        skippedQueueIds.current.add(queueKey);
+        try {
+          await removeUpload(queueKey);
+        } catch {
+          // Item may already be removed after cancel
+        }
+      }
+
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      setUploadItems((prev) => prev.filter((i) => i.id !== item.id));
+      await refreshQueueCounts();
+
+      const deletedFromDrive = item.status === 'completed' && item.driveFileId;
+      showNotification(
+        deletedFromDrive ? 'Removed from queue and Google Drive' : 'Removed from queue',
+        'success'
+      );
+    } catch (err) {
+      showNotification(
+        err.response?.data?.error || err.message || 'Failed to remove item',
+        'error'
+      );
+    } finally {
+      setRemovingId(null);
+    }
   };
 
   const handleCameraDone = () => {
@@ -451,6 +539,8 @@ export default function App() {
             uploadItems={uploadItems}
             onBack={() => setScreen(returnScreen)}
             onRetry={handleRetryUpload}
+            onRemove={handleRemoveUpload}
+            removingId={removingId}
           />
         )}
       </div>

@@ -255,7 +255,7 @@ export async function extractAddressFromFile(file) {
   };
 }
 
-export async function uploadPhotoToFolder(accessToken, folderId, photo) {
+export async function uploadPhotoToFolder(accessToken, folderId, photo, { signal } = {}) {
   const formData = new FormData();
   formData.append(
     'metadata',
@@ -265,7 +265,16 @@ export async function uploadPhotoToFolder(accessToken, folderId, photo) {
   );
   formData.append('file', photo);
 
-  await axios.post(`${UPLOAD_API}?uploadType=multipart&fields=id`, formData, {
+  const res = await axios.post(`${UPLOAD_API}?uploadType=multipart&fields=id`, formData, {
+    headers: driveHeaders(accessToken),
+    signal,
+  });
+
+  return res.data.id;
+}
+
+export async function deleteDriveFile(accessToken, fileId) {
+  await axios.delete(`/api/drive/files/${fileId}`, {
     headers: driveHeaders(accessToken),
   });
 }

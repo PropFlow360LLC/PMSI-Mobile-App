@@ -29,6 +29,8 @@ export default function Camera({
   const [torchOn, setTorchOn] = useState(false);
   const [recording, setRecording] = useState(false);
   const [confirmDone, setConfirmDone] = useState(false);
+  const [captureFlash, setCaptureFlash] = useState(false);
+  const [captureToast, setCaptureToast] = useState(null);
   const [zoom] = useState('1.0x');
 
   const stopCamera = useCallback(() => {
@@ -71,7 +73,6 @@ export default function Camera({
   useEffect(() => {
     startCamera();
     return () => stopCamera();
-    // Restart stream when camera facing or capture mode changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facingMode, mode]);
 
@@ -83,6 +84,13 @@ export default function Camera({
     } catch {
       // Torch not supported on this device
     }
+  };
+
+  const showCaptureFeedback = (message) => {
+    setCaptureFlash(true);
+    setCaptureToast(message);
+    window.setTimeout(() => setCaptureFlash(false), 180);
+    window.setTimeout(() => setCaptureToast(null), 1400);
   };
 
   const toggleTorch = async () => {
@@ -107,6 +115,8 @@ export default function Camera({
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0);
+
+    showCaptureFeedback('Photo captured');
 
     canvas.toBlob(
       (blob) => {
@@ -142,6 +152,7 @@ export default function Camera({
         const file = new File([blob], `video_${Date.now()}.${ext}`, {
           type: blob.type || 'video/webm',
         });
+        showCaptureFeedback('Video captured');
         onUploadFile(file);
         setRecording(false);
       };
@@ -182,132 +193,146 @@ export default function Camera({
     onCancel();
   };
 
-  const activeCount = uploadSummary.uploading + uploadSummary.queued;
   const showQueueBar = uploadSummary.total > 0;
 
   return (
     <div className="camera-screen">
-      <div className="camera-header">
-        <button type="button" className="camera-header-btn" onClick={handleCancel} aria-label="Back">
-          ‹
-        </button>
-        <div className="camera-header-center">
-          <div className="camera-header-title">Camera</div>
-          {propertyAddress && (
-            <div className="camera-header-address">{propertyAddress}</div>
+      <div className="camera-top">
+        <div className="camera-header">
+          <button type="button" className="camera-header-btn" onClick={handleCancel} aria-label="Back">
+            ‹
+          </button>
+          <div className="camera-header-center">
+            <div className="camera-header-title">Camera</div>
+            {propertyAddress && (
+              <div className="camera-header-address">{propertyAddress}</div>
+            )}
+          </div>
+          <div className="camera-header-spacer" />
+        </div>
+
+        {showQueueBar && (
+          <div className="camera-queue-bar">
+            <span className="camera-queue-icon">📤</span>
+            <div className="camera-queue-text">
+              <div>
+                {uploadSummary.uploading > 0
+                  ? `Uploading ${uploadSummary.uploading + uploadSummary.queued} items…`
+                  : `${uploadSummary.queued} item(s) queued`}
+              </div>
+              <div className="camera-queue-sub">
+                {uploadSummary.completed} completed
+                {uploadSummary.uploading > 0 && ` · ${uploadSummary.uploading} uploading`}
+              </div>
+            </div>
+            <button type="button" className="camera-view-queue-btn" onClick={onViewQueue}>
+              View Queue
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="camera-body">
+        <div className="camera-preview">
+          <video ref={videoRef} autoPlay playsInline muted className="camera-video" />
+          <canvas ref={canvasRef} style={{ display: 'none' }} />
+
+          {captureFlash && <div className="camera-flash-overlay" aria-hidden="true" />}
+          {captureToast && (
+            <div className="camera-capture-toast" role="status" aria-live="polite">
+              <span className="camera-capture-check">✓</span>
+              {captureToast}
+            </div>
           )}
         </div>
-        <div className="camera-header-spacer" />
-      </div>
 
-      {showQueueBar && (
-        <div className="camera-queue-bar">
-          <span className="camera-queue-icon">📤</span>
-          <div className="camera-queue-text">
-            <div>
-              {uploadSummary.uploading > 0
-                ? `Uploading ${uploadSummary.uploading + uploadSummary.queued} items…`
-                : `${uploadSummary.queued} item(s) queued`}
+        <div className="camera-controls-column">
+          <div className="camera-mode-bar">
+            <div className="camera-mode-toggle">
+              <button
+                type="button"
+                className={`camera-mode-btn ${mode === 'photo' ? 'active' : ''}`}
+                onClick={() => setMode('photo')}
+              >
+                Photo
+              </button>
+              <button
+                type="button"
+                className={`camera-mode-btn ${mode === 'video' ? 'active' : ''}`}
+                onClick={() => setMode('video')}
+              >
+                Video
+              </button>
             </div>
-            <div className="camera-queue-sub">
-              {uploadSummary.completed} completed
-              {uploadSummary.uploading > 0 && ` · ${uploadSummary.uploading} uploading`}
+            <div className="camera-mode-meta">
+              <button type="button" className="camera-pill" onClick={toggleTorch}>
+                ⚡ {torchOn ? 'On' : 'Off'}
+              </button>
+              <span className="camera-pill camera-pill-static">{zoom}</span>
             </div>
           </div>
-          <button type="button" className="camera-view-queue-btn" onClick={onViewQueue}>
-            View Queue
-          </button>
-        </div>
-      )}
 
-      <div className="camera-preview">
-        <video ref={videoRef} autoPlay playsInline muted className="camera-video" />
-        <canvas ref={canvasRef} style={{ display: 'none' }} />
+          <div className="camera-control-panel">
+            <div className="camera-control-grid">
+              <button
+                type="button"
+                className="camera-round-btn camera-round-snapshot"
+                onClick={capturePhoto}
+                disabled={mode === 'video' && recording}
+              >
+                <span>📷</span>
+              </button>
+              <div className="camera-control-label">
+                <strong>Snapshot</strong>
+                <span>Take a photo</span>
+              </div>
 
-        <div className="camera-overlay-top">
-          <button type="button" className="camera-pill" onClick={toggleTorch}>
-            ⚡ {torchOn ? 'On' : 'Off'}
-          </button>
-          <span className="camera-pill camera-pill-static">{zoom}</span>
-        </div>
+              <button
+                type="button"
+                className={`camera-round-btn camera-round-record ${recording ? 'recording' : ''}`}
+                onClick={handleRecordToggle}
+                disabled={mode === 'photo'}
+              >
+                <span>{recording ? '⏹' : '⏺'}</span>
+              </button>
+              <div className="camera-control-label">
+                <strong>{recording ? 'Stop Video' : 'Record Video'}</strong>
+                <span>{recording ? 'Tap to finish' : 'Start recording'}</span>
+              </div>
 
-        <div className="camera-mode-toggle">
-          <button
-            type="button"
-            className={`camera-mode-btn ${mode === 'photo' ? 'active' : ''}`}
-            onClick={() => setMode('photo')}
-          >
-            Photo
-          </button>
-          <button
-            type="button"
-            className={`camera-mode-btn ${mode === 'video' ? 'active' : ''}`}
-            onClick={() => setMode('video')}
-          >
-            Video
-          </button>
-        </div>
-      </div>
+              <button type="button" className="camera-round-btn" onClick={flipCamera}>
+                <span>🔄</span>
+              </button>
+              <div className="camera-control-label">
+                <strong>Flip</strong>
+                <span>Front / Rear</span>
+              </div>
 
-      <div className="camera-control-panel">
-        <div className="camera-control-grid">
-          <button
-            type="button"
-            className="camera-round-btn camera-round-snapshot"
-            onClick={capturePhoto}
-            disabled={mode === 'video' && recording}
-          >
-            <span>📷</span>
-          </button>
-          <div className="camera-control-label">
-            <strong>Snapshot</strong>
-            <span>Take a photo</span>
+              <button type="button" className="camera-round-btn" onClick={toggleTorch}>
+                <span>💡</span>
+              </button>
+              <div className="camera-control-label">
+                <strong>Light</strong>
+                <span>Torch on/off</span>
+              </div>
+            </div>
           </div>
 
-          <button
-            type="button"
-            className={`camera-round-btn camera-round-record ${recording ? 'recording' : ''}`}
-            onClick={handleRecordToggle}
-            disabled={mode === 'photo'}
-          >
-            <span>{recording ? '⏹' : '⏺'}</span>
-          </button>
-          <div className="camera-control-label">
-            <strong>{recording ? 'Stop Video' : 'Record Video'}</strong>
-            <span>{recording ? 'Tap to finish' : 'Start recording'}</span>
-          </div>
-
-          <button type="button" className="camera-round-btn" onClick={flipCamera}>
-            <span>🔄</span>
-          </button>
-          <div className="camera-control-label">
-            <strong>Flip</strong>
-            <span>Front / Rear</span>
-          </div>
-
-          <button type="button" className="camera-round-btn" onClick={toggleTorch}>
-            <span>💡</span>
-          </button>
-          <div className="camera-control-label">
-            <strong>Light</strong>
-            <span>Torch on/off</span>
+          <div className="camera-exit-bar">
+            <button type="button" className="camera-exit-btn camera-exit-cancel" onClick={handleCancel}>
+              <span>✕</span>
+              <span>Cancel</span>
+            </button>
+            <button
+              type="button"
+              className={`camera-exit-btn camera-exit-done ${confirmDone ? 'confirm-ready' : ''}`}
+              onClick={handleDoneClick}
+            >
+              <span>✓</span>
+              <span>{confirmDone ? 'Tap again to finish' : 'Done'}</span>
+            </button>
           </div>
         </div>
-      </div>
-
-      <div className="camera-exit-bar">
-        <button type="button" className="camera-exit-btn camera-exit-cancel" onClick={handleCancel}>
-          <span>✕</span>
-          <span>Cancel</span>
-        </button>
-        <button
-          type="button"
-          className={`camera-exit-btn camera-exit-done ${confirmDone ? 'confirm-ready' : ''}`}
-          onClick={handleDoneClick}
-        >
-          <span>✓</span>
-          <span>{confirmDone ? 'Tap again to finish' : 'Done'}</span>
-        </button>
       </div>
     </div>
   );

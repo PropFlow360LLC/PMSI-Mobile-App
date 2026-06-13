@@ -2,6 +2,7 @@ import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { handleExtractAddress } from './server/extractAddress.js';
+import { handleDeleteDriveFile } from './server/deleteDriveFile.js';
 import { extractUpload } from './server/uploadMiddleware.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -20,6 +21,7 @@ app.post(
   extractUpload.single('file'),
   handleExtractAddress
 );
+app.delete('/api/drive/files/:fileId', handleDeleteDriveFile);
 
 app.get('/sw.js', noCache, (_req, res) => {
   res.type('application/javascript');

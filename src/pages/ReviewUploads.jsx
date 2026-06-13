@@ -12,9 +12,12 @@ const STATUS_COLOR = {
   failed: '#e53e3e',
 };
 
-function UploadItem({ item, onRetry }) {
+function UploadItem({ item, onRetry, onRemove, removing }) {
   const isVideo = item.mimeType?.startsWith('video/');
   const isImage = item.mimeType?.startsWith('image/');
+
+  const showCancel = item.status === 'uploading';
+  const showDelete = item.status === 'queued' || item.status === 'completed' || item.status === 'failed';
 
   return (
     <div className="review-upload-item">
@@ -44,35 +47,70 @@ function UploadItem({ item, onRetry }) {
           )}
         </div>
       </div>
-      {item.status === 'failed' && item.queueId && (
-        <button type="button" className="review-retry-btn" onClick={() => onRetry(item.queueId)}>
-          Retry
-        </button>
-      )}
+      <div className="review-upload-actions">
+        {item.status === 'failed' && item.queueId && (
+          <button
+            type="button"
+            className="review-retry-btn"
+            onClick={() => onRetry(item.queueId)}
+            disabled={removing}
+          >
+            Retry
+          </button>
+        )}
+        {showCancel && (
+          <button
+            type="button"
+            className="review-cancel-btn"
+            onClick={() => onRemove(item)}
+            disabled={removing}
+          >
+            Cancel
+          </button>
+        )}
+        {showDelete && (
+          <button
+            type="button"
+            className="review-delete-btn"
+            onClick={() => onRemove(item)}
+            disabled={removing}
+          >
+            {removing ? '…' : 'Delete'}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
-function Section({ title, items, onRetry }) {
+function Section({ title, items, onRetry, onRemove, removingId }) {
   if (!items.length) return null;
   return (
     <div className="review-section">
       <h2 className="review-section-title">{title} ({items.length})</h2>
       <div className="review-section-list">
         {items.map((item) => (
-          <UploadItem key={item.id} item={item} onRetry={onRetry} />
+          <UploadItem
+            key={item.id}
+            item={item}
+            onRetry={onRetry}
+            onRemove={onRemove}
+            removing={removingId === item.id}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-export default function ReviewUploads({ uploadItems, onBack, onRetry }) {
+export default function ReviewUploads({ uploadItems, onBack, onRetry, onRemove, removingId }) {
   const uploading = uploadItems.filter((i) => i.status === 'uploading');
   const queued = uploadItems.filter((i) => i.status === 'queued');
   const completed = uploadItems.filter((i) => i.status === 'completed');
   const failed = uploadItems.filter((i) => i.status === 'failed');
   const total = uploadItems.length;
+
+  const sectionProps = { onRetry, onRemove, removingId };
 
   return (
     <div className="review-screen">
@@ -98,10 +136,10 @@ export default function ReviewUploads({ uploadItems, onBack, onRetry }) {
           </div>
         ) : (
           <>
-            <Section title="Uploading" items={uploading} onRetry={onRetry} />
-            <Section title="Queued" items={queued} onRetry={onRetry} />
-            <Section title="Completed" items={completed} onRetry={onRetry} />
-            <Section title="Failed" items={failed} onRetry={onRetry} />
+            <Section title="Uploading" items={uploading} {...sectionProps} />
+            <Section title="Queued" items={queued} {...sectionProps} />
+            <Section title="Completed" items={completed} {...sectionProps} />
+            <Section title="Failed" items={failed} {...sectionProps} />
           </>
         )}
       </div>
