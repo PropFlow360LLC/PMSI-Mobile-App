@@ -48,55 +48,29 @@ export default function AddressScanCamera({ onCapture, onCancel }) {
   };
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 1000,
-        background: 'rgba(0,0,0,0.95)',
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100dvh',
-      }}
-    >
-      <div
-        style={{
-          padding: '12px 16px',
-          paddingTop: 'max(12px, env(safe-area-inset-top, 0px))',
-          color: '#7aaad8',
-          fontSize: '14px',
-          textAlign: 'center',
-        }}
-      >
+    <div className="address-scan-overlay">
+      <div className="address-scan-header">
         Point at address or scope document
       </div>
 
-      <div className="camera-preview" style={{ flex: 1 }}>
+      <div className="camera-preview address-scan-preview">
         {error ? (
           <div style={{ padding: '24px', color: '#e53e3e', textAlign: 'center' }}>{error}</div>
         ) : (
           <video ref={videoRef} autoPlay playsInline className="camera-video" />
         )}
         <canvas ref={canvasRef} style={{ display: 'none' }} />
-        <div className="camera-bottom-shade" aria-hidden="true" />
-        <div
-          className="camera-controls"
-          style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)', padding: 0 }}
-        >
+        <div className="address-scan-shade" aria-hidden="true" />
+        <div className="address-scan-controls">
           <button
             type="button"
             onClick={capture}
             disabled={!ready || capturing || !!error}
-            className="camera-action-btn camera-done-btn"
-            style={{
-              opacity: ready && !capturing ? 1 : 0.5,
-              cursor: ready && !capturing ? 'pointer' : 'not-allowed',
-              minWidth: '120px',
-            }}
+            className="address-scan-capture-btn"
           >
             {capturing ? 'Capturing…' : 'Capture'}
           </button>
-          <button type="button" onClick={onCancel} className="camera-action-btn camera-cancel-btn">
+          <button type="button" onClick={onCancel} className="address-scan-cancel-btn">
             Cancel
           </button>
         </div>

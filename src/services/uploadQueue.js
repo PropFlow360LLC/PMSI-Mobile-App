@@ -86,6 +86,13 @@ export async function getQueueCounts() {
   };
 }
 
+export async function retryQueuedUpload(id) {
+  return updateUploadStatus(id, {
+    status: 'pending',
+    lastError: '',
+  });
+}
+
 export function fileToStoredBlob(file) {
   return file;
 }

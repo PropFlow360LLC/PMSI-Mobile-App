@@ -15,12 +15,15 @@ export default function MainForm({
   selectedUnit,
   coNumber,
   queueCounts,
+  uploadSummary,
   getAccessToken,
   onSelectCustomer,
   onAddressChange,
   onUnitChange,
   onCoNumberChange,
   onOpenCamera,
+  onUploadFromPhone,
+  onReviewUploads,
   onLogout,
   onNotification,
 }) {
@@ -29,6 +32,8 @@ export default function MainForm({
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState(null);
   const [showAddressCamera, setShowAddressCamera] = useState(false);
+
+  const canUpload = Boolean(selectedCustomer && selectedAddress);
 
   const handleAddressBlur = async () => {
     if (!selectedCustomer || !selectedAddress) {
@@ -53,6 +58,14 @@ export default function MainForm({
     }
   };
 
+  const getFolderName = () => {
+    const propertyName = buildPropertyFolderName(selectedAddress, selectedUnit);
+    if (coNumber?.trim()) {
+      return `${propertyName} / ${buildCoFolderName(coNumber)}`;
+    }
+    return propertyName;
+  };
+
   const applyExtracted = async ({ address, unit }) => {
     if (address) onAddressChange(address);
     if (unit) onUnitChange(unit);
@@ -66,25 +79,18 @@ export default function MainForm({
       const { address, unit } = await extractAddressFromFile(file);
       if (address) {
         await applyExtracted({ address, unit });
-        onNotification('Address extracted successfully', 'success');
+        onNotification('Address extracted — review and edit if needed', 'success');
       } else {
         setExtractError('Could not find an address. Try again or type manually.');
-        onNotification("Couldn't read the document. Try again or type the address manually.", 'error');
+        onNotification("Couldn't read the image. Try again or type the address manually.", 'error');
       }
     } catch (err) {
       const msg = err.response?.data?.error || err.message || 'Extraction failed';
       setExtractError(msg);
-      onNotification("Couldn't read the document. Try again or type the address manually.", 'error');
+      onNotification("Couldn't read the image. Try again or type the address manually.", 'error');
     } finally {
       setExtracting(false);
     }
-  };
-
-  const handleFileUploadForAddress = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    await runExtraction(file);
-    e.target.value = '';
   };
 
   const handleAddressCameraCapture = async (file) => {
@@ -92,18 +98,22 @@ export default function MainForm({
     await runExtraction(file);
   };
 
-  const getFolderName = () => {
-    const propertyName = buildPropertyFolderName(selectedAddress, selectedUnit);
-    if (coNumber?.trim()) {
-      return `${propertyName} / ${buildCoFolderName(coNumber)}`;
-    }
-    return propertyName;
-  };
+  const hasUploadActivity =
+    uploadSummary.uploading > 0 ||
+    uploadSummary.queued > 0 ||
+    uploadSummary.failed > 0 ||
+    queueCounts.total > 0;
+  const queueLabel = hasUploadActivity
+    ? `${uploadSummary.queued + queueCounts.pending + queueCounts.failed} queued · ${uploadSummary.uploading + queueCounts.uploading} uploading`
+    : null;
 
-  const queueLabel =
-    queueCounts.total > 0
-      ? `${queueCounts.pending + queueCounts.failed} queued · ${queueCounts.uploading} uploading`
-      : null;
+  const handlePhoneFiles = (e) => {
+    const files = e.target.files;
+    if (files?.length) {
+      onUploadFromPhone(files);
+    }
+    e.target.value = '';
+  };
 
   return (
     <div className="form-screen">
@@ -127,16 +137,15 @@ export default function MainForm({
       </div>
 
       {queueLabel && (
-        <div className="form-screen-queue">
-          📤 Upload queue: {queueLabel}
-        </div>
+        <button type="button" className="form-screen-queue form-screen-queue-btn" onClick={onReviewUploads}>
+          <span>📤 Upload queue: {queueLabel}</span>
+          <span className="form-queue-chevron">›</span>
+        </button>
       )}
 
       <div className="form-screen-body">
         <div style={{ marginBottom: '16px' }}>
-          <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#4a6fa8', marginBottom: '6px', textTransform: 'uppercase' }}>
-            👤 Customer *
-          </label>
+          <label className="form-label">👤 Customer *</label>
           <select
             value={selectedCustomer}
             onChange={(e) => {
@@ -144,7 +153,6 @@ export default function MainForm({
               setDupWarning(false);
             }}
             disabled={extracting}
-            style={{ width: '100%', padding: '10px 12px', background: '#0f1c34', border: '1px solid #1e3560', borderRadius: '8px', color: '#7aaad8' }}
           >
             <option value="">Select customer…</option>
             {customers.map((c) => (
@@ -154,9 +162,7 @@ export default function MainForm({
         </div>
 
         <div style={{ marginBottom: '16px' }}>
-          <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#4a6fa8', marginBottom: '6px', textTransform: 'uppercase' }}>
-            📍 Property Address *
-          </label>
+          <label className="form-label">📍 Property Address *</label>
           <input
             type="text"
             placeholder="e.g. 123 Main St"
@@ -167,71 +173,30 @@ export default function MainForm({
             }}
             onBlur={handleAddressBlur}
             disabled={extracting}
-            style={{ width: '100%', padding: '10px 12px', background: '#0f1c34', border: '1px solid #1e3560', borderRadius: '8px', color: '#7aaad8', marginBottom: '8px', opacity: extracting ? 0.6 : 1 }}
+            style={{ opacity: extracting ? 0.6 : 1 }}
           />
           {extracting && (
-            <div style={{ fontSize: '11px', color: '#fbbf24', marginBottom: '8px' }}>
-              Reading document…
+            <div style={{ fontSize: '11px', color: '#fbbf24', marginTop: '8px' }}>
+              Reading image…
             </div>
           )}
           {extractError && !extracting && (
-            <div style={{ fontSize: '11px', color: '#e53e3e', marginBottom: '8px' }}>
+            <div style={{ fontSize: '11px', color: '#e53e3e', marginTop: '8px' }}>
               {extractError}
             </div>
           )}
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={() => setShowAddressCamera(true)}
-              disabled={extracting}
-              style={{
-                flex: 1,
-                padding: '8px',
-                background: '#2a3550',
-                border: '1px solid #3a5a70',
-                color: extracting ? '#3a5a70' : '#7aaad8',
-                borderRadius: '6px',
-                fontSize: '12px',
-                cursor: extracting ? 'not-allowed' : 'pointer',
-              }}
-            >
-              📷 Camera
-            </button>
-            <label style={{ flex: 1 }}>
-              <span
-                style={{
-                  display: 'block',
-                  padding: '8px',
-                  background: '#2a3550',
-                  border: '1px solid #3a5a70',
-                  color: extracting ? '#3a5a70' : '#7aaad8',
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                  cursor: extracting ? 'not-allowed' : 'pointer',
-                  textAlign: 'center',
-                }}
-              >
-                {extracting ? 'Reading…' : '📄 Upload file'}
-              </span>
-              <input
-                type="file"
-                accept="image/*,.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                onChange={handleFileUploadForAddress}
-                disabled={extracting}
-                style={{ display: 'none' }}
-              />
-            </label>
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowAddressCamera(true)}
+            disabled={extracting}
+            className="form-scan-address-btn"
+          >
+            📷 Scan scope / work order
+          </button>
         </div>
 
         {dupWarning && (
-          <div style={{
-            background: '#1a1000',
-            border: '1.5px solid #854d0e',
-            borderRadius: '8px',
-            padding: '12px',
-            marginBottom: '16px',
-            fontSize: '12px',
-          }}>
+          <div className="form-dup-warning">
             <div style={{ color: '#fbbf24', fontWeight: '700', marginBottom: '8px' }}>⚠️ Address already exists</div>
             <div style={{ color: '#3a5a70', fontSize: '11px', marginBottom: '6px' }}>
               Existing folder: <span style={{ color: '#7aaad8' }}>{dupFolderName}</span>
@@ -244,16 +209,14 @@ export default function MainForm({
               placeholder="Enter CO# for change order (e.g., 2, 3)"
               value={coNumber}
               onChange={(e) => onCoNumberChange(e.target.value)}
-              style={{ width: '100%', padding: '8px', background: '#0f1c34', border: '1px solid #2a3550', borderRadius: '6px', color: '#7aaad8', fontSize: '12px' }}
+              style={{ fontSize: '12px' }}
             />
             <div style={{ fontSize: '10px', color: '#3a5a80', marginTop: '6px' }}>Upload target: {getFolderName()}</div>
           </div>
         )}
 
         <div style={{ marginBottom: '16px' }}>
-          <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#4a6fa8', marginBottom: '6px', textTransform: 'uppercase' }}>
-            🚪 Unit (optional)
-          </label>
+          <label className="form-label">🚪 Unit (optional)</label>
           <input
             type="text"
             placeholder="e.g. 2b, 3a"
@@ -261,37 +224,55 @@ export default function MainForm({
             onChange={(e) => onUnitChange(e.target.value)}
             onBlur={handleAddressBlur}
             disabled={extracting}
-            style={{ width: '100%', padding: '10px 12px', background: '#0f1c34', border: '1px solid #1e3560', borderRadius: '8px', color: '#7aaad8', opacity: extracting ? 0.6 : 1 }}
+            style={{ opacity: extracting ? 0.6 : 1 }}
           />
         </div>
 
         {selectedCustomer && selectedAddress && (
-          <div style={{
-            background: '#0a1525',
-            border: '1px solid #1a3060',
-            borderRadius: '8px',
-            padding: '10px 12px',
-            marginBottom: '16px',
-            fontSize: '11px',
-            color: '#3a5a80',
-          }}>
-            📁 PMSI / <span style={{ color: '#7aaad8' }}>{selectedCustomer}</span> / <span style={{ color: '#7aaad8' }}>{getFolderName()}</span>
+          <div className="form-folder-path">
+            📁 PMSI / <span>{selectedCustomer}</span> / <span>{getFolderName()}</span>
           </div>
         )}
       </div>
 
-      <div className="form-screen-footer">
+      <div className="form-screen-footer form-action-footer">
+        <div className="form-action-grid">
+          <button
+            type="button"
+            onClick={onOpenCamera}
+            disabled={!canUpload || extracting}
+            className="form-action-btn form-action-camera"
+          >
+            <span className="form-action-icon">📷</span>
+            <span className="form-action-title">Open Camera</span>
+            <span className="form-action-sub">Take photos &amp; videos</span>
+          </button>
+
+          <label className={`form-action-btn form-action-phone ${!canUpload || extracting ? 'disabled' : ''}`}>
+            <span className="form-action-icon">🖼️</span>
+            <span className="form-action-title">Upload From Phone</span>
+            <span className="form-action-sub">Photos &amp; videos</span>
+            <input
+              type="file"
+              accept="image/*,video/*"
+              multiple
+              onChange={handlePhoneFiles}
+              disabled={!canUpload || extracting}
+              style={{ display: 'none' }}
+            />
+          </label>
+        </div>
+
         <button
           type="button"
-          onClick={onOpenCamera}
-          disabled={!selectedCustomer || !selectedAddress || extracting}
-          className="form-primary-btn"
-          style={{
-            background: selectedCustomer && selectedAddress && !extracting ? '#008800' : '#004400',
-            cursor: selectedCustomer && selectedAddress && !extracting ? 'pointer' : 'not-allowed',
-          }}
+          onClick={onReviewUploads}
+          className="form-action-btn form-action-review"
         >
-          📷 Open Camera
+          <span className="form-action-icon">☁️</span>
+          <span className="form-action-review-text">
+            <span className="form-action-title">Review Uploads</span>
+            <span className="form-action-sub">View, manage &amp; finish</span>
+          </span>
         </button>
       </div>
 

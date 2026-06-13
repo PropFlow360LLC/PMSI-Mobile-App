@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Login from './pages/Login';
 import MainForm from './pages/MainForm';
 import Camera from './pages/Camera';
+import ReviewUploads from './pages/ReviewUploads';
 import { loadCustomersFromDrive } from './services/googleDrive';
 import {
   loadGoogleScript,
@@ -11,7 +12,14 @@ import {
   ensureValidAccessToken,
 } from './services/googleAuth';
 import { uploadPhotoWithQueue, processUploadQueue } from './services/uploadService';
-import { getQueueCounts } from './services/uploadQueue';
+import { getQueueCounts, getQueuedUploads, retryQueuedUpload, storedBlobToFile } from './services/uploadQueue';
+
+function createPreviewUrl(file) {
+  if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
+    return URL.createObjectURL(file);
+  }
+  return null;
+}
 
 export default function App() {
   const [screen, setScreen] = useState('login');
@@ -25,14 +33,77 @@ export default function App() {
   const [sessionExpiry, setSessionExpiry] = useState(null);
   const [notification, setNotification] = useState(null);
   const [queueCounts, setQueueCounts] = useState({ total: 0, pending: 0, failed: 0, uploading: 0 });
+  const [uploadItems, setUploadItems] = useState([]);
+  const [returnScreen, setReturnScreen] = useState('form');
   const processingQueue = useRef(false);
+  const uploadItemsRef = useRef(uploadItems);
+
+  useEffect(() => {
+    uploadItemsRef.current = uploadItems;
+  }, [uploadItems]);
 
   const showNotification = useCallback((msg, type) => {
     setNotification({ msg, type });
     setTimeout(() => setNotification(null), 3000);
   }, []);
 
+  const upsertUploadItem = useCallback((id, updates) => {
+    setUploadItems((prev) => {
+      const idx = prev.findIndex((i) => i.id === id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], ...updates };
+        return next;
+      }
+      return [{ id, createdAt: Date.now(), ...updates }, ...prev];
+    });
+  }, []);
+
+  const syncQueueToUploadItems = useCallback(async () => {
+    const queued = await getQueuedUploads();
+    setUploadItems((prev) => {
+      const next = [...prev];
+      for (const item of queued) {
+        const status =
+          item.status === 'pending'
+            ? 'queued'
+            : item.status === 'uploading'
+              ? 'uploading'
+              : item.status === 'failed'
+                ? 'failed'
+                : 'queued';
+        const existingIdx = next.findIndex((u) => u.queueId === item.id || u.id === item.id);
+        let previewUrl = existingIdx >= 0 ? next[existingIdx].previewUrl : null;
+        if (!previewUrl && item.blob) {
+          const file = storedBlobToFile(item.blob, item.fileName, item.mimeType);
+          previewUrl = createPreviewUrl(file);
+        }
+        const entry = {
+          id: item.id,
+          queueId: item.id,
+          fileName: item.fileName,
+          mimeType: item.mimeType,
+          previewUrl,
+          status,
+          error: item.lastError || '',
+          source: 'queue',
+          createdAt: item.createdAt,
+        };
+        if (existingIdx >= 0) {
+          next[existingIdx] = { ...next[existingIdx], ...entry };
+        } else {
+          next.unshift(entry);
+        }
+      }
+      return next;
+    });
+  }, []);
+
   const logout = useCallback(() => {
+    uploadItemsRef.current.forEach((item) => {
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+    });
+    setUploadItems([]);
     setAccessToken((token) => {
       if (token) revokeAccessToken(token);
       return null;
@@ -72,6 +143,24 @@ export default function App() {
     return counts;
   }, []);
 
+  const handleQueueProgress = useCallback(({ id, status, error }) => {
+    const mapped =
+      status === 'uploaded'
+        ? 'completed'
+        : status === 'uploading'
+          ? 'uploading'
+          : status === 'failed'
+            ? 'failed'
+            : 'queued';
+    setUploadItems((prev) =>
+      prev.map((item) =>
+        item.queueId === id || item.id === id
+          ? { ...item, status: mapped, error: error || item.error }
+          : item
+      )
+    );
+  }, []);
+
   const runQueueProcessor = useCallback(async () => {
     if (processingQueue.current || screen === 'login') return;
     if (!navigator.onLine) return;
@@ -81,18 +170,19 @@ export default function App() {
       if (!session) return;
 
       processingQueue.current = true;
-      const result = await processUploadQueue(getAccessToken);
+      const result = await processUploadQueue(getAccessToken, { onProgress: handleQueueProgress });
       await refreshQueueCounts();
+      await syncQueueToUploadItems();
 
       if (result.succeeded > 0) {
-        showNotification(`${result.succeeded} queued photo(s) uploaded`, 'success');
+        showNotification(`${result.succeeded} queued file(s) uploaded`, 'success');
       }
     } catch (err) {
       console.error('Queue processing error:', err);
     } finally {
       processingQueue.current = false;
     }
-  }, [getAccessToken, refreshQueueCounts, screen, showNotification]);
+  }, [getAccessToken, refreshQueueCounts, screen, showNotification, handleQueueProgress, syncQueueToUploadItems]);
 
   useEffect(() => {
     const restoreSession = async () => {
@@ -114,6 +204,7 @@ export default function App() {
         }
 
         await refreshQueueCounts();
+        await syncQueueToUploadItems();
         await runQueueProcessor();
       } catch (err) {
         console.log('Session restore:', err);
@@ -181,40 +272,121 @@ export default function App() {
     setScreen('form');
     await loadCustomers(session.accessToken);
     await refreshQueueCounts();
+    await syncQueueToUploadItems();
     await runQueueProcessor();
   };
 
-  const handleUploadPhoto = async (file) => {
+  const startUpload = useCallback(
+    (file, source = 'camera') => {
+      if (!selectedCustomer || !selectedAddress) {
+        showNotification('Select customer and address first', 'error');
+        return null;
+      }
+
+      const id = `upload_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+      const previewUrl = createPreviewUrl(file);
+
+      upsertUploadItem(id, {
+        fileName: file.name,
+        mimeType: file.type,
+        previewUrl,
+        status: 'uploading',
+        source,
+        error: '',
+      });
+
+      uploadPhotoWithQueue({
+        getAccessToken,
+        customer: selectedCustomer,
+        address: selectedAddress,
+        unit: selectedUnit,
+        coNumber,
+        file,
+        queueOnFailure: true,
+      })
+        .then(async (result) => {
+          if (result.success) {
+            upsertUploadItem(id, { status: 'completed' });
+          } else if (result.queued) {
+            upsertUploadItem(id, {
+              status: 'queued',
+              queueId: result.queueId,
+              error: result.error?.message || '',
+            });
+          } else {
+            upsertUploadItem(id, {
+              status: 'failed',
+              error: result.error?.message || 'Upload failed',
+            });
+          }
+          await refreshQueueCounts();
+          runQueueProcessor();
+        })
+        .catch(async (err) => {
+          upsertUploadItem(id, { status: 'failed', error: err.message || 'Upload failed' });
+          await refreshQueueCounts();
+        });
+
+      return id;
+    },
+    [
+      selectedCustomer,
+      selectedAddress,
+      selectedUnit,
+      coNumber,
+      getAccessToken,
+      upsertUploadItem,
+      refreshQueueCounts,
+      runQueueProcessor,
+      showNotification,
+    ]
+  );
+
+  const handleUploadFromPhone = (files) => {
+    const list = Array.from(files || []);
+    if (!list.length) return;
     if (!selectedCustomer || !selectedAddress) {
-      throw new Error('Missing customer or address');
+      showNotification('Select customer and address first', 'error');
+      return;
     }
 
-    const result = await uploadPhotoWithQueue({
-      getAccessToken,
-      customer: selectedCustomer,
-      address: selectedAddress,
-      unit: selectedUnit,
-      coNumber,
-      file,
-      queueOnFailure: true,
-    });
-
-    await refreshQueueCounts();
-    return result;
+    list.forEach((file) => startUpload(file, 'phone'));
+    showNotification(`${list.length} file(s) uploading in background`, 'success');
   };
 
-  const handleCameraDone = (photos) => {
-    const queued = photos.filter((p) => p.status === 'queued' || p.status === 'failed').length;
-    const uploaded = photos.filter((p) => p.status === 'uploaded').length;
+  const handleRetryUpload = async (queueId) => {
+    await retryQueuedUpload(queueId);
+    setUploadItems((prev) =>
+      prev.map((item) =>
+        item.queueId === queueId ? { ...item, status: 'queued', error: '' } : item
+      )
+    );
+    await refreshQueueCounts();
+    runQueueProcessor();
+  };
 
-    if (queued > 0) {
-      showNotification(`${queued} photo(s) queued — will retry when online`, 'error');
+  const handleCameraDone = () => {
+    const active = uploadItems.filter(
+      (p) => p.status === 'queued' || p.status === 'failed' || p.status === 'uploading'
+    ).length;
+    const uploaded = uploadItems.filter((p) => p.status === 'completed').length;
+
+    if (active > 0) {
+      showNotification(`${active} file(s) still uploading or queued — check Review Uploads`, 'error');
     } else if (uploaded > 0) {
-      showNotification(`${uploaded} photo(s) uploaded successfully`, 'success');
+      showNotification(`${uploaded} file(s) uploaded successfully`, 'success');
     }
 
     setScreen('form');
     runQueueProcessor();
+  };
+
+  const uploadSummary = {
+    uploading: uploadItems.filter((i) => i.status === 'uploading').length,
+    queued: uploadItems.filter((i) => i.status === 'queued').length,
+    completed: uploadItems.filter((i) => i.status === 'completed').length,
+    failed: uploadItems.filter((i) => i.status === 'failed').length,
+    total: uploadItems.length,
   };
 
   return (
@@ -235,33 +407,52 @@ export default function App() {
       )}
 
       <div className="app-screen">
-      {screen === 'login' && <Login onLogin={handleLogin} onNotification={showNotification} />}
-      {screen === 'form' && (
-        <MainForm
-          user={user}
-          customers={customers}
-          selectedCustomer={selectedCustomer}
-          selectedAddress={selectedAddress}
-          selectedUnit={selectedUnit}
-          coNumber={coNumber}
-          queueCounts={queueCounts}
-          getAccessToken={getAccessToken}
-          onSelectCustomer={setSelectedCustomer}
-          onAddressChange={setSelectedAddress}
-          onUnitChange={setSelectedUnit}
-          onCoNumberChange={setCoNumber}
-          onOpenCamera={() => setScreen('camera')}
-          onLogout={logout}
-          onNotification={showNotification}
-        />
-      )}
-      {screen === 'camera' && (
-        <Camera
-          onUploadPhoto={handleUploadPhoto}
-          onDone={handleCameraDone}
-          onCancel={() => setScreen('form')}
-        />
-      )}
+        {screen === 'login' && <Login onLogin={handleLogin} onNotification={showNotification} />}
+        {screen === 'form' && (
+          <MainForm
+            user={user}
+            customers={customers}
+            selectedCustomer={selectedCustomer}
+            selectedAddress={selectedAddress}
+            selectedUnit={selectedUnit}
+            coNumber={coNumber}
+            queueCounts={queueCounts}
+            uploadSummary={uploadSummary}
+            getAccessToken={getAccessToken}
+            onSelectCustomer={setSelectedCustomer}
+            onAddressChange={setSelectedAddress}
+            onUnitChange={setSelectedUnit}
+            onCoNumberChange={setCoNumber}
+            onOpenCamera={() => setScreen('camera')}
+            onUploadFromPhone={handleUploadFromPhone}
+            onReviewUploads={() => {
+              setReturnScreen('form');
+              setScreen('review');
+            }}
+            onLogout={logout}
+            onNotification={showNotification}
+          />
+        )}
+        {screen === 'camera' && (
+          <Camera
+            propertyAddress={selectedAddress}
+            uploadSummary={uploadSummary}
+            onUploadFile={(file) => startUpload(file, 'camera')}
+            onViewQueue={() => {
+              setReturnScreen('camera');
+              setScreen('review');
+            }}
+            onDone={handleCameraDone}
+            onCancel={() => setScreen('form')}
+          />
+        )}
+        {screen === 'review' && (
+          <ReviewUploads
+            uploadItems={uploadItems}
+            onBack={() => setScreen(returnScreen)}
+            onRetry={handleRetryUpload}
+          />
+        )}
       </div>
     </div>
   );

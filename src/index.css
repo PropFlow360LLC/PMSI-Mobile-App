@@ -59,6 +59,230 @@ html, body, #root {
   color: #fbbf24;
 }
 
+.form-screen-queue-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+
+.form-queue-chevron {
+  font-size: 16px;
+  color: #7aaad8;
+}
+
+.form-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #4a6fa8;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.form-dup-warning {
+  background: #1a1000;
+  border: 1.5px solid #854d0e;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+  font-size: 12px;
+}
+
+.form-folder-path {
+  background: #0a1525;
+  border: 1px solid #1a3060;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  font-size: 11px;
+  color: #3a5a80;
+}
+
+.form-folder-path span {
+  color: #7aaad8;
+}
+
+.form-scan-address-btn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: #2a3550;
+  border: 1px solid #3a5a70;
+  color: #7aaad8;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.form-scan-address-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Address scan camera overlay */
+.address-scan-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.95);
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+
+.address-scan-header {
+  padding: 12px 16px;
+  padding-top: max(12px, env(safe-area-inset-top, 0px));
+  color: #7aaad8;
+  font-size: 14px;
+  text-align: center;
+}
+
+.address-scan-preview {
+  flex: 1;
+  position: relative;
+}
+
+.address-scan-shade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 180px;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.85) 100%);
+}
+
+.address-scan-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  padding: 0 16px;
+}
+
+.address-scan-capture-btn {
+  min-width: 120px;
+  padding: 12px 20px;
+  background: #00ff00;
+  color: #000;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 8px;
+}
+
+.address-scan-capture-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.address-scan-cancel-btn {
+  padding: 12px 20px;
+  background: #333;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+}
+
+.form-action-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form-action-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.form-action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 20px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #fff;
+  text-align: center;
+  min-height: 120px;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.form-action-btn:active {
+  transform: scale(0.98);
+}
+
+.form-action-btn.disabled,
+.form-action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.form-action-icon {
+  font-size: 28px;
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.form-action-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.form-action-sub {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.65);
+  font-weight: 400;
+}
+
+.form-action-camera {
+  background: linear-gradient(180deg, #1a4a8a 0%, #0f2d5c 100%);
+}
+
+.form-action-phone {
+  background: linear-gradient(180deg, #5a2d8a 0%, #3a1a5c 100%);
+}
+
+.form-action-review {
+  width: 100%;
+  min-height: 88px;
+  background: linear-gradient(180deg, #1a6a2a 0%, #0f4a1a 100%);
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 16px;
+  padding: 16px 20px;
+}
+
+.form-action-review .form-action-icon {
+  flex-shrink: 0;
+}
+
+.form-action-review .form-action-review-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  text-align: left;
+}
+
 .form-screen-body {
   flex: 1;
   min-height: 0;
@@ -155,12 +379,87 @@ button:active {
   background: #2a4570;
 }
 
-/* Camera — controls overlaid for thumb reach + iPhone safe area */
+/* Camera — field technician layout */
 .camera-screen {
   display: flex;
   flex-direction: column;
   height: 100dvh;
   background: #000;
+}
+
+.camera-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  padding-top: max(8px, env(safe-area-inset-top, 0px));
+  background: #0a0e27;
+  border-bottom: 1px solid #1a2540;
+}
+
+.camera-header-btn {
+  background: none;
+  color: #7aaad8;
+  font-size: 28px;
+  line-height: 1;
+  padding: 4px 12px;
+  border: none;
+}
+
+.camera-header-center {
+  flex: 1;
+  text-align: center;
+}
+
+.camera-header-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.camera-header-address {
+  font-size: 12px;
+  color: #7aaad8;
+  margin-top: 2px;
+}
+
+.camera-header-spacer {
+  width: 44px;
+}
+
+.camera-queue-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #1a1000;
+  border-bottom: 1px solid #854d0e;
+}
+
+.camera-queue-icon {
+  font-size: 16px;
+}
+
+.camera-queue-text {
+  flex: 1;
+  font-size: 12px;
+  color: #fbbf24;
+}
+
+.camera-queue-sub {
+  font-size: 11px;
+  color: #7aaad8;
+  margin-top: 2px;
+}
+
+.camera-view-queue-btn {
+  background: #1e3560;
+  color: #7aaad8;
+  padding: 8px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+  white-space: nowrap;
 }
 
 .camera-preview {
@@ -177,70 +476,325 @@ button:active {
   object-fit: cover;
 }
 
-.camera-bottom-shade {
+.camera-overlay-top {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 220px;
+  top: max(12px, env(safe-area-inset-top, 0px));
+  left: 12px;
+  right: 12px;
+  display: flex;
+  justify-content: space-between;
   pointer-events: none;
-  background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.85) 100%);
 }
 
-.camera-status-badge {
-  position: absolute;
-  left: 16px;
-  right: 16px;
-  background: rgba(0, 0, 0, 0.75);
+.camera-pill {
+  pointer-events: auto;
+  background: rgba(0, 0, 0, 0.65);
   color: #fff;
-  padding: 8px 12px;
-  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  padding: 6px 12px;
   font-size: 12px;
   font-weight: 600;
 }
 
-.camera-thumbs {
+.camera-pill-static {
+  pointer-events: none;
+}
+
+.camera-mode-toggle {
   position: absolute;
-  left: 0;
-  right: 0;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
-  gap: 8px;
-  padding: 8px 12px;
-  overflow-x: auto;
-  background: rgba(0, 0, 0, 0.55);
+  gap: 0;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 999px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.camera-controls {
-  position: absolute;
-  left: 0;
-  right: 0;
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-  align-items: center;
-  padding: 0 16px;
+.camera-mode-btn {
+  background: transparent;
+  color: #fff;
+  padding: 8px 20px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  border-radius: 999px;
+  text-transform: uppercase;
 }
 
-.camera-capture-btn {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  border: 3px solid #00ff00;
-  flex-shrink: 0;
-}
-
-.camera-action-btn {
-  padding: 12px 20px;
-  font-size: 14px;
-  border-radius: 8px;
-}
-
-.camera-done-btn {
-  background: #00ff00;
+.camera-mode-btn.active {
+  background: #fbbf24;
   color: #000;
 }
 
-.camera-cancel-btn {
-  background: #333;
+.camera-control-panel {
+  flex-shrink: 0;
+  background: rgba(10, 14, 39, 0.98);
+  border-top: 1px solid #1a2540;
+  padding: 16px;
+}
+
+.camera-control-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.camera-round-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #1a2540;
+  border: 2px solid #2a4570;
   color: #fff;
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+.camera-round-snapshot {
+  background: #1a4a8a;
+  border-color: #3a7ad8;
+}
+
+.camera-round-record {
+  background: #5a1a1a;
+  border-color: #c53030;
+}
+
+.camera-round-record.recording {
+  background: #c53030;
+  animation: pulse-record 1s infinite;
+}
+
+@keyframes pulse-record {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.camera-control-label {
+  text-align: center;
+  font-size: 10px;
+  color: #7aaad8;
+  margin-top: 4px;
+}
+
+.camera-control-label strong {
+  display: block;
+  font-size: 11px;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.camera-control-label span {
+  display: block;
+  margin-top: 2px;
+  color: #3a5a80;
+}
+
+.camera-exit-bar {
+  flex-shrink: 0;
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  background: #0a0e27;
+  border-top: 1px solid #1a2540;
+}
+
+.camera-exit-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: 10px;
+}
+
+.camera-exit-cancel {
+  background: #1a2540;
+  color: #e53e3e;
+  max-width: 40%;
+}
+
+.camera-exit-done {
+  background: #004400;
+  color: #fff;
+  border: 2px solid #004400;
+}
+
+.camera-exit-done.confirm-ready {
+  background: #008800;
+  border-color: #00ff00;
+  box-shadow: 0 0 12px rgba(0, 255, 0, 0.35);
+}
+
+/* Review Uploads */
+.review-screen {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+}
+
+.review-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  padding-top: max(12px, env(safe-area-inset-top, 0px));
+  border-bottom: 1px solid #1a2540;
+}
+
+.review-back-btn {
+  background: none;
+  color: #7aaad8;
+  font-size: 28px;
+  padding: 4px 8px;
+  border: none;
+}
+
+.review-header-title {
+  flex: 1;
+}
+
+.review-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.review-subtitle {
+  font-size: 12px;
+  color: #7aaad8;
+  margin-top: 2px;
+}
+
+.review-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px;
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+}
+
+.review-empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: #3a5a80;
+}
+
+.review-empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.review-section {
+  margin-bottom: 24px;
+}
+
+.review-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #4a6fa8;
+  text-transform: uppercase;
+  margin: 0 0 10px;
+  letter-spacing: 0.05em;
+}
+
+.review-section-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.review-upload-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  background: #0f1c34;
+  border: 1px solid #1e3560;
+  border-radius: 10px;
+}
+
+.review-upload-thumb {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #0a1525;
+}
+
+.review-upload-thumb img,
+.review-upload-thumb video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.review-upload-thumb-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+.review-upload-status-dot {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #0f1c34;
+}
+
+.review-upload-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.review-upload-name {
+  font-size: 13px;
+  color: #7aaad8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.review-upload-meta {
+  font-size: 11px;
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+.review-upload-error {
+  color: #3a5a80;
+  font-weight: 400;
+}
+
+.review-retry-btn {
+  flex-shrink: 0;
+  background: #1a4a8a;
+  color: #fff;
+  padding: 8px 14px;
+  font-size: 12px;
+  border-radius: 6px;
 }
